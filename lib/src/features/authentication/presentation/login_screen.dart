@@ -1,3 +1,4 @@
+import 'package:fks_fan_shop/src/features/authentication/presentation/main_shell.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../data/auth_repository.dart';
@@ -86,13 +87,23 @@ class _LoginScreenState extends State<LoginScreen>
 
     setState(() => _isLoading = true);
     final user = await _authRepo.signIn(email, pass);
+    
+    if (!mounted) return; // Sigurnosna provjera da je widget još aktivan
+
     setState(() => _isLoading = false);
 
     if (user != null) {
-      _pokaziPoruku("Uspjesna prijava!");
-      // Navigacija na Home
+      _pokaziPoruku("Dobrodošli u Bordo porodicu!");
+      
+      // DODANA NAVIGACIJA:
+      // Koristimo pushReplacement da korisnik ne može kliknuti "back" na login
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (context) => const MainShell(),
+        ),
+      );
     } else {
-      _pokaziPoruku("Pogresan email ili lozinka.", isError: true);
+      _pokaziPoruku("Pogrešan email ili lozinka.", isError: true);
     }
   }
 
