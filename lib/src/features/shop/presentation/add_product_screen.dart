@@ -42,7 +42,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
   final Map<String, IconData> _categoryIcons = {
     'Dresovi': Icons.sports_soccer,
     'Duksevi': Icons.checkroom,
-    'Salovi': Icons.scarf,
+    'Salovi': Icons.dry_cleaning,
     'Aksesoari': Icons.watch,
   };
 

@@ -31,7 +31,7 @@ class _HomeScreenState extends State<HomeScreen> {
     'Sve': Icons.apps_rounded,
     'Dresovi': Icons.sports_soccer,
     'Duksevi': Icons.checkroom,
-    'Salovi': Icons.scarf,
+    'Salovi': Icons.dry_cleaning,
     'Aksesoari': Icons.watch,
   };
 
