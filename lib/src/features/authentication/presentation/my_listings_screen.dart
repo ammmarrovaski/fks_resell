@@ -1,0 +1,257 @@
+import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../../shop/data/shop_repository.dart';
+import '../../shop/domain/product.dart';
+import '../../shop/presentation/product_detail_screen.dart';
+
+class _ListColors {
+  static const Color bordo = Color(0xFF722F37);
+  static const Color background = Color(0xFF1A1A1A);
+  static const Color cardBg = Color(0xFF242424);
+  static const Color inputBg = Color(0xFF2A2A2A);
+  static const Color textPrimary = Color(0xFFF5F5F5);
+  static const Color textSecondary = Color(0xFFAAAAAA);
+  static const Color textMuted = Color(0xFF666666);
+}
+
+class MyListingsScreen extends StatelessWidget {
+  const MyListingsScreen({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+    final shopRepo = ShopRepository();
+
+    return Scaffold(
+      backgroundColor: _ListColors.background,
+      appBar: AppBar(
+        backgroundColor: _ListColors.background,
+        foregroundColor: _ListColors.textPrimary,
+        elevation: 0,
+        title: const Text(
+          'Moje objave',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+        ),
+        leading: IconButton(
+          icon: Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: _ListColors.cardBg,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.arrow_back_rounded, size: 20),
+          ),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+      body: user == null
+          ? const Center(
+              child: Text(
+                'Morate biti prijavljeni.',
+                style: TextStyle(color: _ListColors.textSecondary),
+              ),
+            )
+          : StreamBuilder<List<Product>>(
+              stream: shopRepo.getProductsByUser(user.uid),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(
+                    child: CircularProgressIndicator(color: _ListColors.bordo),
+                  );
+                }
+
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.error_outline, size: 48, color: _ListColors.textMuted),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'Greska pri ucitavanju',
+                          style: TextStyle(color: _ListColors.textSecondary, fontSize: 16),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                final products = snapshot.data ?? [];
+
+                if (products.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: 80,
+                          height: 80,
+                          decoration: const BoxDecoration(
+                            color: _ListColors.cardBg,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.inventory_2_outlined,
+                            size: 40,
+                            color: _ListColors.textMuted,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Nemate objava',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            color: _ListColors.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        const Text(
+                          'Objavite svoj prvi artikal!',
+                          style: TextStyle(fontSize: 14, color: _ListColors.textMuted),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                return ListView.separated(
+                  padding: const EdgeInsets.all(20),
+                  itemCount: products.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  itemBuilder: (context, index) {
+                    return _buildListingCard(context, products[index]);
+                  },
+                );
+              },
+            ),
+    );
+  }
+
+  Widget _buildListingCard(BuildContext context, Product product) {
+    final hasImage = product.imageUrls.isNotEmpty;
+
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => ProductDetailScreen(product: product)),
+        );
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: _ListColors.cardBg,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: _ListColors.textMuted.withOpacity(0.1)),
+        ),
+        child: Row(
+          children: [
+            // Image
+            ClipRRect(
+              borderRadius: const BorderRadius.horizontal(left: Radius.circular(16)),
+              child: SizedBox(
+                width: 100,
+                height: 100,
+                child: hasImage
+                    ? CachedNetworkImage(
+                        imageUrl: product.imageUrls.first,
+                        fit: BoxFit.cover,
+                        placeholder: (context, url) => Container(
+                          color: _ListColors.inputBg,
+                          child: const Center(
+                            child: SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(color: _ListColors.bordo, strokeWidth: 2),
+                            ),
+                          ),
+                        ),
+                        errorWidget: (context, url, error) => Container(
+                          color: _ListColors.inputBg,
+                          child: const Icon(Icons.broken_image, color: _ListColors.textMuted),
+                        ),
+                      )
+                    : Container(
+                        color: _ListColors.inputBg,
+                        child: Icon(
+                          Icons.shopping_bag_outlined,
+                          color: _ListColors.bordo.withOpacity(0.4),
+                          size: 32,
+                        ),
+                      ),
+              ),
+            ),
+
+            // Info
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      product.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: _ListColors.textPrimary,
+                        height: 1.3,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Text(
+                          '${product.price.toStringAsFixed(0)} KM',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: _ListColors.bordo,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: _ListColors.bordo.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            product.category,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: _ListColors.bordo,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      product.condition,
+                      style: const TextStyle(fontSize: 12, color: _ListColors.textMuted),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // Chevron
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: Icon(
+                Icons.chevron_right_rounded,
+                color: _ListColors.textMuted.withOpacity(0.5),
+                size: 24,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

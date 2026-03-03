@@ -1,13 +1,44 @@
+import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../domain/product.dart'; // <-- Ne zaboravi kreirati model ako već nisi
+import 'package:firebase_storage/firebase_storage.dart';
+import '../domain/product.dart';
 
 class ShopRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseStorage _storage = FirebaseStorage.instance;
 
-  // --- KORAK 2: OBJAVLJIVANJE (ADD) ---
-  Future<void> addProduct(String title, double price, String category) async {
+  // Upload images to Firebase Storage and return download URLs
+  Future<List<String>> uploadImages(List<File> images) async {
+    final user = _auth.currentUser;
+    if (user == null) throw Exception("Korisnik nije prijavljen");
+
+    final List<String> downloadUrls = [];
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+
+    for (int i = 0; i < images.length; i++) {
+      final ref = _storage.ref().child('products/${user.uid}/${timestamp}_$i.jpg');
+      final uploadTask = await ref.putFile(
+        images[i],
+        SettableMetadata(contentType: 'image/jpeg'),
+      );
+      final url = await uploadTask.ref.getDownloadURL();
+      downloadUrls.add(url);
+    }
+
+    return downloadUrls;
+  }
+
+  // Add a new product with images, description, and condition
+  Future<void> addProduct(
+    String title,
+    double price,
+    String category, {
+    List<String> imageUrls = const [],
+    String description = '',
+    String condition = 'Novo',
+  }) async {
     try {
       final user = _auth.currentUser;
       if (user == null) throw Exception("Korisnik nije prijavljen");
@@ -17,24 +48,58 @@ class ShopRepository {
         'price': price,
         'category': category,
         'userId': user.uid,
-        'createdAt': FieldValue.serverTimestamp(), // Važno za sortiranje
+        'imageUrls': imageUrls,
+        'description': description,
+        'condition': condition,
+        'createdAt': FieldValue.serverTimestamp(),
       });
-      print("Uspješno poslato na Firestore!");
     } catch (e) {
-      print("Greška u repozitorijumu: $e");
       rethrow;
     }
   }
 
-  // --- KORAK 1: ČITANJE (STREAM/REALTIME) ---
+  // Delete a product and its images from Storage
+  Future<void> deleteProduct(String productId, List<String> imageUrls) async {
+    try {
+      // Delete images from Storage
+      for (final url in imageUrls) {
+        try {
+          final ref = _storage.refFromURL(url);
+          await ref.delete();
+        } catch (_) {
+          // Image may already be deleted, continue
+        }
+      }
+
+      // Delete Firestore document
+      await _firestore.collection('products').doc(productId).delete();
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  // Stream all products ordered by newest first
   Stream<List<Product>> getProducts() {
     return _firestore
         .collection('products')
-        .orderBy('createdAt', descending: true) // Najnoviji prvi
+        .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) {
       return snapshot.docs.map((doc) {
-        // Koristimo model Product.fromMap da konvertujemo podatke
+        return Product.fromMap(doc.data(), doc.id);
+      }).toList();
+    });
+  }
+
+  // Stream products for a specific user
+  Stream<List<Product>> getProductsByUser(String userId) {
+    return _firestore
+        .collection('products')
+        .where('userId', isEqualTo: userId)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs.map((doc) {
         return Product.fromMap(doc.data(), doc.id);
       }).toList();
     });
