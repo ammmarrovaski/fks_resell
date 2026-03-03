@@ -310,13 +310,47 @@ class _HomeScreenState extends State<HomeScreen> {
                   top: Radius.circular(16),
                 ),
               ),
-              child: Center(
-                child: Icon(
-                  _categoryIcons[product.category] ?? Icons.shopping_bag,
-                  size: 40,
-                  color: _HomeColors.bordo.withOpacity(0.5),
-                ),
-              ),
+              child: product.imageUrl != null && product.imageUrl!.isNotEmpty
+                  ? ClipRRect(
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(16),
+                      ),
+                      child: Image.network(
+                        product.imageUrl!,
+                        width: double.infinity,
+                        height: double.infinity,
+                        fit: BoxFit.cover,
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return Center(
+                            child: CircularProgressIndicator(
+                              color: _HomeColors.bordo.withOpacity(0.5),
+                              strokeWidth: 2,
+                              value: loadingProgress.expectedTotalBytes != null
+                                  ? loadingProgress.cumulativeBytesLoaded /
+                                      loadingProgress.expectedTotalBytes!
+                                  : null,
+                            ),
+                          );
+                        },
+                        errorBuilder: (context, error, stackTrace) {
+                          return Center(
+                            child: Icon(
+                              _categoryIcons[product.category] ?? Icons.shopping_bag,
+                              size: 40,
+                              color: _HomeColors.bordo.withOpacity(0.5),
+                            ),
+                          );
+                        },
+                      ),
+                    )
+                  : Center(
+                      child: Icon(
+                        _categoryIcons[product.category] ?? Icons.shopping_bag,
+                        size: 40,
+                        color: _HomeColors.bordo.withOpacity(0.5),
+                      ),
+                    ),
             ),
           ),
           // Product info

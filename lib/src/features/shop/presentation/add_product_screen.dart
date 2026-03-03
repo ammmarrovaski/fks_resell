@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../data/shop_repository.dart';
 
 // Bordo boje za FK Sarajevo temu
@@ -35,6 +37,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
   String _selectedCondition = 'Novo';
   bool _isLoading = false;
   bool _publishSuccess = false;
+  File? _selectedImage;
+  final _imagePicker = ImagePicker();
 
   final List<String> _categories = ['Dresovi', 'Duksevi', 'Salovi', 'Aksesoari'];
   final List<String> _conditions = ['Novo', 'Kao novo', 'Korišteno'];
@@ -46,6 +50,93 @@ class _AddProductScreenState extends State<AddProductScreen> {
     'Aksesoari': Icons.watch,
   };
 
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final pickedFile = await _imagePicker.pickImage(
+        source: source,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 85,
+      );
+      if (pickedFile != null) {
+        setState(() => _selectedImage = File(pickedFile.path));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Greska pri odabiru slike: $e"),
+            backgroundColor: Colors.red.shade700,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            margin: const EdgeInsets.all(16),
+          ),
+        );
+      }
+    }
+  }
+
+  void _showImageSourcePicker() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: _AppColors.cardBg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Odaberi sliku',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: _AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 20),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: _AppColors.bordo.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.camera_alt_rounded, color: _AppColors.bordo),
+                ),
+                title: const Text('Kamera', style: TextStyle(color: _AppColors.textPrimary)),
+                subtitle: const Text('Slikaj novu fotografiju', style: TextStyle(color: _AppColors.textMuted)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickImage(ImageSource.camera);
+                },
+              ),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: _AppColors.bordo.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.photo_library_rounded, color: _AppColors.bordo),
+                ),
+                title: const Text('Galerija', style: TextStyle(color: _AppColors.textPrimary)),
+                subtitle: const Text('Odaberi iz galerije', style: TextStyle(color: _AppColors.textMuted)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickImage(ImageSource.gallery);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _objaviArtikal() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -56,7 +147,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
     setState(() => _isLoading = true);
 
     try {
-      await _shopRepo.addProduct(title, price, _selectedCategory);
+      await _shopRepo.addProduct(title, price, _selectedCategory, imageFile: _selectedImage);
       if (mounted) {
         setState(() {
           _publishSuccess = true;
@@ -71,6 +162,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
           _titleController.clear();
           _priceController.clear();
           _descriptionController.clear();
+          _selectedImage = null;
           _formKey.currentState?.reset();
 
           // Switch to Shop tab if callback is provided
@@ -345,6 +437,130 @@ class _AddProductScreenState extends State<AddProductScreen> {
               hint: 'Dodajte opis artikla...',
               icon: Icons.description_outlined,
               maxLines: 4,
+            ),
+
+            const SizedBox(height: 24),
+
+            // Image picker
+            const Text(
+              'Fotografija artikla',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: _AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            GestureDetector(
+              onTap: _showImageSourcePicker,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                width: double.infinity,
+                height: _selectedImage != null ? 220 : 140,
+                decoration: BoxDecoration(
+                  color: _AppColors.inputBg,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: _selectedImage != null
+                        ? _AppColors.bordo.withOpacity(0.5)
+                        : _AppColors.textMuted.withOpacity(0.2),
+                    width: _selectedImage != null ? 2 : 1,
+                  ),
+                ),
+                child: _selectedImage != null
+                    ? Stack(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(14),
+                            child: Image.file(
+                              _selectedImage!,
+                              width: double.infinity,
+                              height: double.infinity,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                          Positioned(
+                            top: 8,
+                            right: 8,
+                            child: GestureDetector(
+                              onTap: () => setState(() => _selectedImage = null),
+                              child: Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withOpacity(0.6),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.close_rounded,
+                                  color: Colors.white,
+                                  size: 18,
+                                ),
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            bottom: 8,
+                            left: 8,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.6),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.edit_rounded, color: Colors.white, size: 14),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    'Promijeni',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
+                    : Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: _AppColors.bordo.withOpacity(0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.add_a_photo_rounded,
+                              color: _AppColors.bordo,
+                              size: 28,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          const Text(
+                            'Dodaj fotografiju',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: _AppColors.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            'Tapni za odabir iz galerije ili kamere',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: _AppColors.textMuted,
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
             ),
 
             const SizedBox(height: 32),
