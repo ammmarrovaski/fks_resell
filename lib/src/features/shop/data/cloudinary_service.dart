@@ -54,4 +54,31 @@ class ImageUploadService {
       );
     }
   }
+
+  /// Deletes an image from Supabase Storage by its public URL.
+  static Future<void> deleteImage(String publicUrl) async {
+    // Extract the file path from the public URL
+    // URL format: .../storage/v1/object/public/product-images/filename
+    final marker = '/object/public/$_bucketName/';
+    final index = publicUrl.indexOf(marker);
+    if (index == -1) return; // Not a Supabase URL, skip
+
+    final filePath = publicUrl.substring(index + marker.length);
+
+    final deleteUrl = Uri.parse(
+      '$_supabaseUrl/storage/v1/object/$_bucketName/$filePath',
+    );
+
+    final response = await http.delete(
+      deleteUrl,
+      headers: {
+        'Authorization': 'Bearer $_supabaseAnonKey',
+        'apikey': _supabaseAnonKey,
+      },
+    );
+
+    if (response.statusCode != 200 && response.statusCode != 204) {
+      // Silently fail - image might already be deleted
+    }
+  }
 }

@@ -1,29 +1,23 @@
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+import 'package:http/http.dart' as http;
 import '../domain/product.dart';
+import 'cloudinary_service.dart';
 
 class ShopRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseStorage _storage = FirebaseStorage.instance;
 
-  // Upload images to Firebase Storage and return download URLs
+  // Upload images to Supabase Storage via ImageUploadService and return public URLs
   Future<List<String>> uploadImages(List<File> images) async {
     final user = _auth.currentUser;
     if (user == null) throw Exception("Korisnik nije prijavljen");
 
     final List<String> downloadUrls = [];
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
 
     for (int i = 0; i < images.length; i++) {
-      final ref = _storage.ref().child('products/${user.uid}/${timestamp}_$i.jpg');
-      final uploadTask = await ref.putFile(
-        images[i],
-        SettableMetadata(contentType: 'image/jpeg'),
-      );
-      final url = await uploadTask.ref.getDownloadURL();
+      final url = await ImageUploadService.uploadImage(images[i]);
       downloadUrls.add(url);
     }
 
@@ -58,14 +52,13 @@ class ShopRepository {
     }
   }
 
-  // Delete a product and its images from Storage
+  // Delete a product and its images from Supabase Storage
   Future<void> deleteProduct(String productId, List<String> imageUrls) async {
     try {
-      // Delete images from Storage
+      // Delete images from Supabase Storage
       for (final url in imageUrls) {
         try {
-          final ref = _storage.refFromURL(url);
-          await ref.delete();
+          await ImageUploadService.deleteImage(url);
         } catch (_) {
           // Image may already be deleted, continue
         }
