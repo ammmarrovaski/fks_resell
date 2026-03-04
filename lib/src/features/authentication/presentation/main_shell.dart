@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'home_screen.dart'; // Napravit ćemo ga odmah
-import '../../shop/presentation/add_product_screen.dart'; // Za objavu artikla
+import 'home_screen.dart';
+import 'profile_screen.dart';
+import '../../shop/presentation/add_product_screen.dart';
 
 class MainShell extends StatefulWidget {
   const MainShell({Key? key}) : super(key: key);
@@ -12,11 +13,10 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> {
   int _selectedIndex = 0;
 
-  // Lista ekrana kroz koje se navigira
   final List<Widget> _screens = [
-    const HomeScreen(),        // Pregled artikala i kategorije
-    const AddProductScreen(),   // Objava novog artikla
-    const Center(child: Text('Profil i Moje objave')), 
+    const HomeScreen(),
+    const AddProductScreen(),
+    const ProfileScreen(),
   ];
 
   @override
