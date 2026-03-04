@@ -1,35 +1,56 @@
 import 'dart:io';
-import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class ImageUploadService {
-  // Replace this with your ImgBB API key (free at https://api.imgbb.com/)
-  static const String _apiKey = 'YOUR_IMGBB_API_KEY';
+  // ============================================================
+  // POSTAVI OVE VRIJEDNOSTI SA SVOG SUPABASE DASHBOARD-a:
+  // Settings > API > Project URL  i  Project API keys (anon public)
+  // ============================================================
+  static const String _supabaseUrl = 'YOUR_SUPABASE_URL';       // npr. https://abcdefghij.supabase.co
+  static const String _supabaseAnonKey = 'YOUR_SUPABASE_ANON_KEY'; // anon / public key
+  static const String _bucketName = 'product-images';
 
-  /// Uploads an image to ImgBB (free, no country restrictions).
-  /// Returns the URL of the uploaded image.
+  /// Uploads an image to Supabase Storage.
+  /// Returns the public URL of the uploaded image.
   static Future<String> uploadImage(File imageFile) async {
-    final url = Uri.parse('https://api.imgbb.com/1/upload');
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final fileName = imageFile.path.split('/').last;
+    final filePath = '$timestamp\_$fileName';
 
-    // Convert image to base64
-    final bytes = await imageFile.readAsBytes();
-    final base64Image = base64Encode(bytes);
-
-    final response = await http.post(
-      url,
-      body: {
-        'key': _apiKey,
-        'image': base64Image,
-      },
+    // Upload via Supabase Storage REST API
+    final uploadUrl = Uri.parse(
+      '$_supabaseUrl/storage/v1/object/$_bucketName/$filePath',
     );
 
-    if (response.statusCode == 200) {
-      final jsonData = json.decode(response.body);
-      final imageUrl = jsonData['data']['url'] as String;
-      return imageUrl;
+    final bytes = await imageFile.readAsBytes();
+
+    // Determine content type
+    final ext = fileName.split('.').last.toLowerCase();
+    String contentType = 'image/jpeg';
+    if (ext == 'png') contentType = 'image/png';
+    if (ext == 'webp') contentType = 'image/webp';
+    if (ext == 'gif') contentType = 'image/gif';
+
+    final response = await http.post(
+      uploadUrl,
+      headers: {
+        'Authorization': 'Bearer $_supabaseAnonKey',
+        'apikey': _supabaseAnonKey,
+        'Content-Type': contentType,
+      },
+      body: bytes,
+    );
+
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      // Build the public URL
+      final publicUrl =
+          '$_supabaseUrl/storage/v1/object/public/$_bucketName/$filePath';
+      return publicUrl;
     } else {
+      final errorBody = json.decode(response.body);
       throw Exception(
-        'Greska pri uploadu slike: ${response.body}',
+        'Greska pri uploadu slike: ${errorBody['message'] ?? errorBody['error'] ?? response.body}',
       );
     }
   }

@@ -17,9 +17,9 @@ class ShopRepository {
 
       String? imageUrl;
 
-      // Upload image to ImgBB first if provided
+      // Upload image to Supabase Storage first if provided
       if (imageFile != null) {
-        print("[DEBUG] Uploading image to ImgBB...");
+        print("[DEBUG] Uploading image to Supabase...");
         imageUrl = await ImageUploadService.uploadImage(imageFile);
         print("[DEBUG] Image uploaded: $imageUrl");
       }
