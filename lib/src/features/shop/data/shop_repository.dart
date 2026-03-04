@@ -17,10 +17,10 @@ class ShopRepository {
 
       String? imageUrl;
 
-      // Upload image to Cloudinary first if provided
+      // Upload image to ImgBB first if provided
       if (imageFile != null) {
-        print("[DEBUG] Uploading image to Cloudinary...");
-        imageUrl = await CloudinaryService.uploadImage(imageFile);
+        print("[DEBUG] Uploading image to ImgBB...");
+        imageUrl = await ImageUploadService.uploadImage(imageFile);
         print("[DEBUG] Image uploaded: $imageUrl");
       }
 
