@@ -7,8 +7,8 @@ class ImageUploadService {
   // POSTAVI OVE VRIJEDNOSTI SA SVOG SUPABASE DASHBOARD-a:
   // Settings > API > Project URL  i  Project API keys (anon public)
   // ============================================================
-  static const String _supabaseUrl = 'YOUR_SUPABASE_URL';       // npr. https://abcdefghij.supabase.co
-  static const String _supabaseAnonKey = 'YOUR_SUPABASE_ANON_KEY'; // anon / public key
+  static const String _supabaseUrl = 'https://xwbkwdwxbemnwrdcixye.supabase.co';
+  static const String _supabaseAnonKey = 'sb_publishable_3IHb6yDQQszUlY1InylHQA_mYOWpQVt';
   static const String _bucketName = 'product-images';
 
   /// Uploads an image to Supabase Storage.
