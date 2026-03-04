@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:url_launcher/url_launcher.dart' as launcher;
 import '../data/shop_repository.dart';
 import '../domain/product.dart';
 
@@ -256,8 +256,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     final mailtoUrl = Uri.parse(
                       'mailto:${product.sellerEmail}?subject=$subject&body=$body',
                     );
-                    if (await canLaunchUrl(mailtoUrl)) {
-                      await launchUrl(mailtoUrl);
+                    if (await launcher.canLaunchUrl(mailtoUrl)) {
+                      await launcher.launchUrl(mailtoUrl);
                     }
                   },
                   icon: const Icon(Icons.email_rounded, size: 20),
