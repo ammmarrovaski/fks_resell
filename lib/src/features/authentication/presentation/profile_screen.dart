@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'login_screen.dart';
+import 'my_listings_screen.dart';
 
 // Bordo boje za FK Sarajevo temu
 class _ProfileColors {
@@ -100,8 +101,13 @@ class ProfileScreen extends StatelessWidget {
               _buildMenuItem(
                 icon: Icons.shopping_bag_outlined,
                 title: 'Moje objave',
-                subtitle: 'Pregled vaših artikala',
-                onTap: () {},
+                subtitle: 'Pregled vasih artikala',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const MyListingsScreen()),
+                  );
+                },
               ),
               _buildMenuItem(
                 icon: Icons.favorite_outline,
