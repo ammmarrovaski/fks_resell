@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:url_launcher/url_launcher.dart' as launcher;
 import '../data/shop_repository.dart';
 import '../domain/product.dart';
 
@@ -247,22 +246,24 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton.icon(
-                  onPressed: () async {
-                    Navigator.pop(ctx);
-                    final subject = Uri.encodeComponent('Upit za: ${product.title}');
-                    final body = Uri.encodeComponent(
-                      'Pozdrav,\n\nZainteresovan/a sam za artikal "${product.title}" (${product.price.toStringAsFixed(0)} KM).\n\nMolim vas za vise informacija.\n\nHvala!',
+onPressed: () async {
+                    await Clipboard.setData(
+                      ClipboardData(text: product.sellerEmail),
                     );
-                    final mailtoUrl = Uri.parse(
-                      'mailto:${product.sellerEmail}?subject=$subject&body=$body',
-                    );
-                    if (await launcher.canLaunchUrl(mailtoUrl)) {
-                      await launcher.launchUrl(mailtoUrl);
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            'Email kopiran: ${product.sellerEmail}',
+                          ),
+                          backgroundColor: _DetailColors.bordo,
+                        ),
+                      );
                     }
                   },
-                  icon: const Icon(Icons.email_rounded, size: 20),
+                  icon: const Icon(Icons.copy_rounded, size: 20),
                   label: const Text(
-                    'Posalji email',
+                    'Kopiraj email',
                     style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
                   ),
                   style: ElevatedButton.styleFrom(
