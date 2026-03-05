@@ -6,6 +6,10 @@ import 'my_listings_screen.dart';
 import 'favorites_screen.dart';
 import 'cart_screen.dart';
 import 'purchased_screen.dart';
+import 'settings_screen.dart';
+import 'help_screen.dart';
+import 'edit_profile_screen.dart';
+import 'statistics_screen.dart';
 
 class _ProfileColors {
   static const Color bordo = Color(0xFF722F37);
@@ -50,23 +54,56 @@ class ProfileScreen extends StatelessWidget {
 
               const SizedBox(height: 28),
 
-              // Avatar
-              Container(
-                width: 90,
-                height: 90,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: _ProfileColors.bordo.withOpacity(0.2),
-                  border: Border.all(
-                    color: _ProfileColors.bordo.withOpacity(0.5),
-                    width: 2,
+              // Avatar with edit button
+              Stack(
+                children: [
+                  Container(
+                    width: 90,
+                    height: 90,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: _ProfileColors.bordo.withOpacity(0.2),
+                      border: Border.all(
+                        color: _ProfileColors.bordo.withOpacity(0.5),
+                        width: 2,
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.person_rounded,
+                      size: 44,
+                      color: _ProfileColors.bordo,
+                    ),
                   ),
-                ),
-                child: const Icon(
-                  Icons.person_rounded,
-                  size: 44,
-                  color: _ProfileColors.bordo,
-                ),
+                  Positioned(
+                    bottom: 0,
+                    right: 0,
+                    child: GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const EditProfileScreen()),
+                        );
+                      },
+                      child: Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: _ProfileColors.bordo,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: _ProfileColors.background,
+                            width: 2.5,
+                          ),
+                        ),
+                        child: const Icon(
+                          Icons.edit_rounded,
+                          color: Colors.white,
+                          size: 14,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
 
               const SizedBox(height: 16),
@@ -210,6 +247,20 @@ class ProfileScreen extends StatelessWidget {
                 },
               ),
 
+              // Statistika
+              _buildMenuItem(
+                context: context,
+                icon: Icons.bar_chart_rounded,
+                title: 'Statistika',
+                subtitle: 'Pregled vase aktivnosti',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const StatisticsScreen()),
+                  );
+                },
+              ),
+
               const SizedBox(height: 20),
 
               // Section header
@@ -232,14 +283,24 @@ class ProfileScreen extends StatelessWidget {
                 icon: Icons.settings_outlined,
                 title: 'Postavke',
                 subtitle: 'Postavke naloga',
-                onTap: () {},
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                  );
+                },
               ),
               _buildMenuItem(
                 context: context,
                 icon: Icons.help_outline,
                 title: 'Pomoc',
                 subtitle: 'Cesto postavljana pitanja',
-                onTap: () {},
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const HelpScreen()),
+                  );
+                },
               ),
 
               const SizedBox(height: 24),
