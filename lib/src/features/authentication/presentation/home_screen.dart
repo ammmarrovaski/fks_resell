@@ -330,44 +330,78 @@ class _HomeScreenState extends State<HomeScreen> {
             // Product image
             Expanded(
               flex: 3,
-              child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: hasImage
-                      ? CachedNetworkImage(
-                          imageUrl: product.imageUrls.first,
-                          fit: BoxFit.cover,
-                          placeholder: (context, url) => Container(
-                            color: _HomeColors.inputBg,
-                            child: const Center(
-                              child: SizedBox(
-                                width: 24,
-                                height: 24,
-                                child: CircularProgressIndicator(color: _HomeColors.bordo, strokeWidth: 2),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  ClipRRect(
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: hasImage
+                          ? CachedNetworkImage(
+                              imageUrl: product.imageUrls.first,
+                              fit: BoxFit.cover,
+                              placeholder: (context, url) => Container(
+                                color: _HomeColors.inputBg,
+                                child: const Center(
+                                  child: SizedBox(
+                                    width: 24,
+                                    height: 24,
+                                    child: CircularProgressIndicator(color: _HomeColors.bordo, strokeWidth: 2),
+                                  ),
+                                ),
+                              ),
+                              errorWidget: (context, url, error) => Container(
+                                color: _HomeColors.inputBg,
+                                child: Icon(
+                                  _categoryIcons[product.category] ?? Icons.shopping_bag,
+                                  size: 40,
+                                  color: _HomeColors.bordo.withOpacity(0.5),
+                                ),
+                              ),
+                            )
+                          : Container(
+                              color: _HomeColors.inputBg,
+                              child: Center(
+                                child: Icon(
+                                  _categoryIcons[product.category] ?? Icons.shopping_bag,
+                                  size: 40,
+                                  color: _HomeColors.bordo.withOpacity(0.5),
+                                ),
+                              ),
+                            ),
+                    ),
+                  ),
+                  // PRODANO overlay
+                  if (product.isSold)
+                    ClipRRect(
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                      child: Container(
+                        color: Colors.black.withOpacity(0.55),
+                        child: Center(
+                          child: Transform.rotate(
+                            angle: -0.3,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFE53935),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Text(
+                                'PRODANO',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w900,
+                                  color: Colors.white,
+                                  letterSpacing: 2,
+                                ),
                               ),
                             ),
                           ),
-                          errorWidget: (context, url, error) => Container(
-                            color: _HomeColors.inputBg,
-                            child: Icon(
-                              _categoryIcons[product.category] ?? Icons.shopping_bag,
-                              size: 40,
-                              color: _HomeColors.bordo.withOpacity(0.5),
-                            ),
-                          ),
-                        )
-                      : Container(
-                          color: _HomeColors.inputBg,
-                          child: Center(
-                            child: Icon(
-                              _categoryIcons[product.category] ?? Icons.shopping_bag,
-                              size: 40,
-                              color: _HomeColors.bordo.withOpacity(0.5),
-                            ),
-                          ),
                         ),
-                ),
+                      ),
+                    ),
+                ],
               ),
             ),
             // Product info
@@ -390,7 +424,11 @@ class _HomeScreenState extends State<HomeScreen> {
                       children: [
                         Text(
                           '${product.price.toStringAsFixed(0)} KM',
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _HomeColors.bordo),
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: product.isSold ? _HomeColors.textMuted : _HomeColors.bordo,
+                          ),
                         ),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),

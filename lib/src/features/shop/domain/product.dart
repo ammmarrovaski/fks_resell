@@ -10,6 +10,9 @@ class Product {
   final String description;
   final String condition;
   final DateTime? createdAt;
+  final bool isSold;
+  final String sellerEmail;
+  final String sellerDisplayName;
 
   Product({
     required this.id,
@@ -21,6 +24,9 @@ class Product {
     this.description = '',
     this.condition = 'Novo',
     this.createdAt,
+    this.isSold = false,
+    this.sellerEmail = '',
+    this.sellerDisplayName = '',
   });
 
   factory Product.fromMap(Map<String, dynamic>? map, String documentId) {
@@ -58,6 +64,9 @@ class Product {
       description: map['description']?.toString() ?? '',
       condition: map['condition']?.toString() ?? 'Novo',
       createdAt: parsedCreatedAt,
+      isSold: map['isSold'] == true,
+      sellerEmail: map['sellerEmail']?.toString() ?? '',
+      sellerDisplayName: map['sellerDisplayName']?.toString() ?? '',
     );
   }
 }
