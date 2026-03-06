@@ -4,17 +4,25 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../data/shop_repository.dart';
 import '../domain/product.dart';
+import '../../chat/data/chat_repository.dart';
+import '../../chat/presentation/chat_detail_screen.dart';
+import '../../notifications/data/notification_repository.dart';
 
 class _DetailColors {
   static const Color bordo = Color(0xFF722F37);
-  static const Color background = Color(0xFF1A1A1A);
-  static const Color cardBg = Color(0xFF242424);
+  static const Color bordoLight = Color(0xFF8B3A42);
+  static const Color background = Color(0xFF121212);
+  static const Color surface = Color(0xFF1E1E1E);
+  static const Color cardBg = Color(0xFF262626);
   static const Color inputBg = Color(0xFF2A2A2A);
   static const Color textPrimary = Color(0xFFF5F5F5);
-  static const Color textSecondary = Color(0xFFAAAAAA);
-  static const Color textMuted = Color(0xFF666666);
+  static const Color textSecondary = Color(0xFFB0B0B0);
+  static const Color textMuted = Color(0xFF6B6B6B);
+  static const Color divider = Color(0xFF333333);
   static const Color sold = Color(0xFFE53935);
   static const Color green = Color(0xFF4CAF50);
+  static const Color accent = Color(0xFFD4A574);
+  static const Color blue = Color(0xFF42A5F5);
 }
 
 class ProductDetailScreen extends StatefulWidget {
@@ -28,6 +36,8 @@ class ProductDetailScreen extends StatefulWidget {
 class _ProductDetailScreenState extends State<ProductDetailScreen> {
   final _pageController = PageController();
   final _shopRepo = ShopRepository();
+  final _chatRepo = ChatRepository();
+  final _notiRepo = NotificationRepository();
   int _currentPage = 0;
   bool _isDeleting = false;
   bool _isFavorite = false;
@@ -70,6 +80,16 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         await _shopRepo.removeFromFavorites(widget.product.id);
       } else {
         await _shopRepo.addToFavorites(widget.product.id);
+        // Send notification to product owner
+        if (!_isOwner) {
+          await _notiRepo.createNotification(
+            toUserId: widget.product.userId,
+            type: 'favorite',
+            title: 'Neko je lajkovao vas artikal',
+            body: '${widget.product.title} je dodan u omiljene.',
+            productId: widget.product.id,
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -90,7 +110,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               content: const Text('Uklonjeno iz korpe'),
               backgroundColor: _DetailColors.cardBg,
               behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               margin: const EdgeInsets.all(16),
             ),
           );
@@ -103,11 +123,51 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               content: const Text('Dodano u korpu'),
               backgroundColor: _DetailColors.green,
               behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               margin: const EdgeInsets.all(16),
             ),
           );
         }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Greska: $e'), backgroundColor: _DetailColors.sold),
+        );
+      }
+    }
+  }
+
+  Future<void> _openChat() async {
+    try {
+      final chatRoomId = await _chatRepo.getOrCreateChatRoom(
+        otherUserId: widget.product.userId,
+        otherUserName: widget.product.sellerDisplayName.isNotEmpty
+            ? widget.product.sellerDisplayName
+            : 'Prodavac',
+        productId: widget.product.id,
+        productTitle: widget.product.title,
+        productImageUrl: widget.product.imageUrls.isNotEmpty
+            ? widget.product.imageUrls.first
+            : null,
+      );
+
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ChatDetailScreen(
+              chatRoomId: chatRoomId,
+              otherUserName: widget.product.sellerDisplayName.isNotEmpty
+                  ? widget.product.sellerDisplayName
+                  : 'Prodavac',
+              productTitle: widget.product.title,
+              productImageUrl: widget.product.imageUrls.isNotEmpty
+                  ? widget.product.imageUrls.first
+                  : null,
+            ),
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -134,7 +194,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Handle bar
             Center(
               child: Container(
                 width: 40,
@@ -149,68 +208,72 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
             const Text(
               'Kontaktiraj prodavca',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: _DetailColors.textPrimary,
-              ),
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: _DetailColors.textPrimary),
             ),
             const SizedBox(height: 20),
 
-            // Seller info
+            // Seller info card
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: _DetailColors.inputBg,
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Row(
                 children: [
-                  Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 22,
-                        backgroundColor: _DetailColors.bordo.withOpacity(0.2),
-                        child: const Icon(Icons.person, color: _DetailColors.bordo, size: 24),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              product.sellerDisplayName.isNotEmpty
-                                  ? product.sellerDisplayName
-                                  : 'Prodavac',
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: _DetailColors.textPrimary,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              product.sellerEmail.isNotEmpty
-                                  ? product.sellerEmail
-                                  : 'Email nije dostupan',
-                              style: const TextStyle(
-                                fontSize: 13,
-                                color: _DetailColors.textSecondary,
-                              ),
-                            ),
-                          ],
+                  CircleAvatar(
+                    radius: 22,
+                    backgroundColor: _DetailColors.bordo.withOpacity(0.2),
+                    child: const Icon(Icons.person, color: _DetailColors.bordo, size: 24),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          product.sellerDisplayName.isNotEmpty ? product.sellerDisplayName : 'Prodavac',
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: _DetailColors.textPrimary),
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 2),
+                        Text(
+                          product.sellerEmail.isNotEmpty ? product.sellerEmail : 'Email nije dostupan',
+                          style: const TextStyle(fontSize: 13, color: _DetailColors.textSecondary),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 16),
 
+            // Send message button
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _openChat();
+                },
+                icon: const Icon(Icons.chat_rounded, size: 20),
+                label: const Text(
+                  'POSALJI PORUKU',
+                  style: TextStyle(fontWeight: FontWeight.w600, letterSpacing: 0.5),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _DetailColors.bordo,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  elevation: 0,
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+
             // Copy email button
-            if (product.sellerEmail.isNotEmpty) ...[
+            if (product.sellerEmail.isNotEmpty)
               SizedBox(
                 width: double.infinity,
                 height: 48,
@@ -223,7 +286,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         content: const Text('Email kopiran u clipboard'),
                         backgroundColor: _DetailColors.green,
                         behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         margin: const EdgeInsets.all(16),
                       ),
                     );
@@ -239,42 +302,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 10),
-
-              // Send email button
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton.icon(
-onPressed: () async {
-                    await Clipboard.setData(
-                      ClipboardData(text: product.sellerEmail),
-                    );
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            'Email kopiran: ${product.sellerEmail}',
-                          ),
-                          backgroundColor: _DetailColors.bordo,
-                        ),
-                      );
-                    }
-                  },
-                  icon: const Icon(Icons.copy_rounded, size: 20),
-                  label: const Text(
-                    'Kopiraj email',
-                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _DetailColors.bordo,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    elevation: 0,
-                  ),
-                ),
-              ),
-            ],
 
             SizedBox(height: MediaQuery.of(ctx).padding.bottom + 8),
           ],
@@ -289,14 +316,10 @@ onPressed: () async {
       builder: (ctx) => AlertDialog(
         backgroundColor: _DetailColors.cardBg,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
-          'Oznaci kao prodano?',
-          style: TextStyle(color: _DetailColors.textPrimary, fontWeight: FontWeight.bold),
-        ),
-        content: const Text(
-          'Artikal ce biti oznacen kao prodan i kupci ga vise nece moci kupiti.',
-          style: TextStyle(color: _DetailColors.textSecondary, fontSize: 14),
-        ),
+        title: const Text('Oznaci kao prodano?',
+            style: TextStyle(color: _DetailColors.textPrimary, fontWeight: FontWeight.bold)),
+        content: const Text('Artikal ce biti oznacen kao prodan i kupci ga vise nece moci kupiti.',
+            style: TextStyle(color: _DetailColors.textSecondary, fontSize: 14)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -328,7 +351,7 @@ onPressed: () async {
             content: const Text('Artikal oznacen kao prodan'),
             backgroundColor: _DetailColors.green,
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             margin: const EdgeInsets.all(16),
           ),
         );
@@ -349,14 +372,10 @@ onPressed: () async {
       builder: (ctx) => AlertDialog(
         backgroundColor: _DetailColors.cardBg,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
-          'Obrisi artikal?',
-          style: TextStyle(color: _DetailColors.textPrimary, fontWeight: FontWeight.bold),
-        ),
-        content: const Text(
-          'Ova akcija se ne moze ponistiti. Artikal i sve slike ce biti trajno uklonjeni.',
-          style: TextStyle(color: _DetailColors.textSecondary, fontSize: 14),
-        ),
+        title: const Text('Obrisi artikal?',
+            style: TextStyle(color: _DetailColors.textPrimary, fontWeight: FontWeight.bold)),
+        content: const Text('Ova akcija se ne moze ponistiti. Artikal i sve slike ce biti trajno uklonjeni.',
+            style: TextStyle(color: _DetailColors.textSecondary, fontSize: 14)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -389,7 +408,7 @@ onPressed: () async {
             content: Text('Greska pri brisanju: $e'),
             backgroundColor: Colors.red.shade700,
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             margin: const EdgeInsets.all(16),
           ),
         );
@@ -425,23 +444,25 @@ onPressed: () async {
               slivers: [
                 // Image carousel as SliverAppBar
                 SliverAppBar(
-                  expandedHeight: hasImages ? 360 : 200,
+                  expandedHeight: hasImages ? 380 : 200,
                   pinned: true,
-                  backgroundColor: _DetailColors.cardBg,
+                  backgroundColor: _DetailColors.surface,
                   leading: _buildBackButton(),
                   actions: [
-                    // Favorite button for non-owners
                     if (!_isOwner)
                       Padding(
                         padding: const EdgeInsets.only(right: 8),
                         child: GestureDetector(
                           onTap: _toggleFavorite,
                           child: Container(
-                            width: 40,
-                            height: 40,
+                            width: 42,
+                            height: 42,
                             decoration: BoxDecoration(
                               color: Colors.black.withOpacity(0.4),
                               shape: BoxShape.circle,
+                              border: Border.all(
+                                color: _isFavorite ? _DetailColors.sold.withOpacity(0.5) : Colors.white.withOpacity(0.15),
+                              ),
                             ),
                             child: Icon(
                               _isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
@@ -459,7 +480,6 @@ onPressed: () async {
                         hasImages
                             ? _buildImageCarousel(product)
                             : _buildNoImagePlaceholder(product),
-                        // PRODANO overlay
                         if (_isSold)
                           Container(
                             color: Colors.black.withOpacity(0.5),
@@ -471,6 +491,13 @@ onPressed: () async {
                                   decoration: BoxDecoration(
                                     color: _DetailColors.sold,
                                     borderRadius: BorderRadius.circular(8),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: _DetailColors.sold.withOpacity(0.4),
+                                        blurRadius: 16,
+                                        spreadRadius: 2,
+                                      ),
+                                    ],
                                   ),
                                   child: const Text(
                                     'PRODANO',
@@ -503,23 +530,17 @@ onPressed: () async {
                             margin: const EdgeInsets.only(bottom: 12),
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                             decoration: BoxDecoration(
-                              color: _DetailColors.sold.withOpacity(0.15),
+                              color: _DetailColors.sold.withOpacity(0.12),
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: _DetailColors.sold.withOpacity(0.3)),
+                              border: Border.all(color: _DetailColors.sold.withOpacity(0.25)),
                             ),
                             child: const Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Icon(Icons.check_circle, color: _DetailColors.sold, size: 16),
                                 SizedBox(width: 6),
-                                Text(
-                                  'Ovaj artikal je prodan',
-                                  style: TextStyle(
-                                    color: _DetailColors.sold,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 13,
-                                  ),
-                                ),
+                                Text('Ovaj artikal je prodan',
+                                    style: TextStyle(color: _DetailColors.sold, fontWeight: FontWeight.w600, fontSize: 13)),
                               ],
                             ),
                           ),
@@ -528,12 +549,13 @@ onPressed: () async {
                         Text(
                           '${product.price.toStringAsFixed(0)} KM',
                           style: TextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.bold,
+                            fontSize: 30,
+                            fontWeight: FontWeight.w800,
                             color: _isSold ? _DetailColors.textMuted : _DetailColors.bordo,
+                            letterSpacing: -0.5,
                           ),
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 10),
 
                         // Title
                         Text(
@@ -560,30 +582,20 @@ onPressed: () async {
 
                         // Description
                         if (product.description.isNotEmpty) ...[
-                          const Text(
-                            'Opis',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: _DetailColors.textPrimary,
-                            ),
-                          ),
+                          const Text('Opis',
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: _DetailColors.textPrimary)),
                           const SizedBox(height: 10),
                           Container(
                             width: double.infinity,
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
-                              color: _DetailColors.cardBg,
+                              color: _DetailColors.surface,
                               borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: _DetailColors.textMuted.withOpacity(0.1)),
+                              border: Border.all(color: _DetailColors.divider),
                             ),
                             child: Text(
                               product.description,
-                              style: const TextStyle(
-                                fontSize: 15,
-                                color: _DetailColors.textSecondary,
-                                height: 1.5,
-                              ),
+                              style: const TextStyle(fontSize: 15, color: _DetailColors.textSecondary, height: 1.5),
                             ),
                           ),
                           const SizedBox(height: 24),
@@ -591,38 +603,62 @@ onPressed: () async {
 
                         // Seller info section
                         if (!_isOwner && product.sellerDisplayName.isNotEmpty) ...[
-                          const Text(
-                            'Prodavac',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: _DetailColors.textPrimary,
-                            ),
-                          ),
+                          const Text('Prodavac',
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: _DetailColors.textPrimary)),
                           const SizedBox(height: 10),
                           Container(
                             padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
-                              color: _DetailColors.cardBg,
+                              color: _DetailColors.surface,
                               borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: _DetailColors.textMuted.withOpacity(0.1)),
+                              border: Border.all(color: _DetailColors.divider),
                             ),
                             child: Row(
                               children: [
-                                CircleAvatar(
-                                  radius: 20,
-                                  backgroundColor: _DetailColors.bordo.withOpacity(0.15),
+                                Container(
+                                  width: 44,
+                                  height: 44,
+                                  decoration: BoxDecoration(
+                                    color: _DetailColors.bordo.withOpacity(0.15),
+                                    shape: BoxShape.circle,
+                                  ),
                                   child: const Icon(Icons.person, color: _DetailColors.bordo, size: 22),
                                 ),
                                 const SizedBox(width: 12),
-                                Text(
-                                  product.sellerDisplayName,
-                                  style: const TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w500,
-                                    color: _DetailColors.textPrimary,
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        product.sellerDisplayName,
+                                        style: const TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w600,
+                                          color: _DetailColors.textPrimary,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      const Text(
+                                        'Clan bordo porodice',
+                                        style: TextStyle(fontSize: 12, color: _DetailColors.textMuted),
+                                      ),
+                                    ],
                                   ),
                                 ),
+                                // Chat shortcut
+                                if (!_isSold)
+                                  GestureDetector(
+                                    onTap: _openChat,
+                                    child: Container(
+                                      width: 40,
+                                      height: 40,
+                                      decoration: BoxDecoration(
+                                        color: _DetailColors.bordo.withOpacity(0.12),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: const Icon(Icons.chat_rounded, color: _DetailColors.bordo, size: 18),
+                                    ),
+                                  ),
                               ],
                             ),
                           ),
@@ -646,75 +682,94 @@ onPressed: () async {
 
                         // === BUYER ACTIONS ===
                         if (!_isOwner && !_isSold) ...[
-                          // Contact seller button
+                          // Send message button (PRIMARY)
                           SizedBox(
                             width: double.infinity,
-                            height: 52,
+                            height: 54,
                             child: ElevatedButton.icon(
-                              onPressed: _showContactSheet,
-                              icon: const Icon(Icons.email_rounded, size: 20),
+                              onPressed: _openChat,
+                              icon: const Icon(Icons.chat_rounded, size: 20),
                               label: const Text(
-                                'KONTAKTIRAJ PRODAVCA',
-                                style: TextStyle(fontWeight: FontWeight.w600, letterSpacing: 0.5),
+                                'POSALJI PORUKU',
+                                style: TextStyle(fontWeight: FontWeight.w700, letterSpacing: 0.8, fontSize: 15),
                               ),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: _DetailColors.bordo,
                                 foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                                 elevation: 0,
                               ),
                             ),
                           ),
                           const SizedBox(height: 12),
 
-                          // Add to cart / remove from cart
-                          SizedBox(
-                            width: double.infinity,
-                            height: 52,
-                            child: OutlinedButton.icon(
-                              onPressed: _toggleCart,
-                              icon: Icon(
-                                _isInCart ? Icons.remove_shopping_cart_rounded : Icons.add_shopping_cart_rounded,
-                                color: _isInCart ? _DetailColors.textMuted : _DetailColors.bordo,
-                                size: 20,
-                              ),
-                              label: Text(
-                                _isInCart ? 'UKLONI IZ KORPE' : 'DODAJ U KORPU',
-                                style: TextStyle(
-                                  color: _isInCart ? _DetailColors.textMuted : _DetailColors.bordo,
-                                  fontWeight: FontWeight.w600,
-                                  letterSpacing: 0.5,
+                          // Contact via email + Cart row
+                          Row(
+                            children: [
+                              Expanded(
+                                child: SizedBox(
+                                  height: 50,
+                                  child: OutlinedButton.icon(
+                                    onPressed: _showContactSheet,
+                                    icon: Icon(
+                                      Icons.email_outlined,
+                                      color: _DetailColors.textSecondary,
+                                      size: 18,
+                                    ),
+                                    label: const Text(
+                                      'Email',
+                                      style: TextStyle(color: _DetailColors.textSecondary, fontWeight: FontWeight.w500),
+                                    ),
+                                    style: OutlinedButton.styleFrom(
+                                      side: BorderSide(color: _DetailColors.divider),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                    ),
+                                  ),
                                 ),
                               ),
-                              style: OutlinedButton.styleFrom(
-                                side: BorderSide(
-                                  color: _isInCart
-                                      ? _DetailColors.textMuted.withOpacity(0.3)
-                                      : _DetailColors.bordo.withOpacity(0.5),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: SizedBox(
+                                  height: 50,
+                                  child: OutlinedButton.icon(
+                                    onPressed: _toggleCart,
+                                    icon: Icon(
+                                      _isInCart ? Icons.remove_shopping_cart_rounded : Icons.add_shopping_cart_rounded,
+                                      color: _isInCart ? _DetailColors.textMuted : _DetailColors.bordo,
+                                      size: 18,
+                                    ),
+                                    label: Text(
+                                      _isInCart ? 'Ukloni' : 'Korpa',
+                                      style: TextStyle(
+                                        color: _isInCart ? _DetailColors.textMuted : _DetailColors.bordo,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    style: OutlinedButton.styleFrom(
+                                      side: BorderSide(
+                                        color: _isInCart ? _DetailColors.divider : _DetailColors.bordo.withOpacity(0.4),
+                                      ),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                    ),
+                                  ),
                                 ),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                               ),
-                            ),
+                            ],
                           ),
                         ],
 
                         // === OWNER ACTIONS ===
                         if (_isOwner) ...[
-                          // Mark as sold button
                           if (!_isSold)
                             SizedBox(
                               width: double.infinity,
-                              height: 52,
+                              height: 54,
                               child: ElevatedButton.icon(
                                 onPressed: _isMarkingSold ? null : _confirmMarkAsSold,
                                 icon: _isMarkingSold
                                     ? const SizedBox(
-                                        width: 18,
-                                        height: 18,
-                                        child: CircularProgressIndicator(
-                                          color: Colors.white,
-                                          strokeWidth: 2,
-                                        ),
+                                        width: 18, height: 18,
+                                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                                       )
                                     : const Icon(Icons.check_circle_outline_rounded, size: 20),
                                 label: Text(
@@ -732,7 +787,6 @@ onPressed: () async {
 
                           if (!_isSold) const SizedBox(height: 12),
 
-                          // Delete button
                           SizedBox(
                             width: double.infinity,
                             height: 52,
@@ -748,7 +802,7 @@ onPressed: () async {
                                 ),
                               ),
                               style: OutlinedButton.styleFrom(
-                                side: BorderSide(color: Colors.red.shade400.withOpacity(0.5)),
+                                side: BorderSide(color: Colors.red.shade400.withOpacity(0.4)),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                               ),
                             ),
@@ -794,20 +848,17 @@ onPressed: () async {
               fit: BoxFit.cover,
               width: double.infinity,
               placeholder: (context, url) => Container(
-                color: _DetailColors.inputBg,
-                child: const Center(
-                  child: CircularProgressIndicator(color: _DetailColors.bordo, strokeWidth: 2),
-                ),
+                color: _DetailColors.surface,
+                child: const Center(child: CircularProgressIndicator(color: _DetailColors.bordo, strokeWidth: 2)),
               ),
               errorWidget: (context, url, error) => Container(
-                color: _DetailColors.inputBg,
+                color: _DetailColors.surface,
                 child: const Icon(Icons.broken_image_rounded, color: _DetailColors.textMuted, size: 48),
               ),
             );
           },
         ),
 
-        // Dot indicators
         if (product.imageUrls.length > 1)
           Positioned(
             bottom: 16,
@@ -818,20 +869,22 @@ onPressed: () async {
               children: List.generate(product.imageUrls.length, (index) {
                 final isActive = index == _currentPage;
                 return AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
+                  duration: const Duration(milliseconds: 250),
                   margin: const EdgeInsets.symmetric(horizontal: 4),
-                  width: isActive ? 24 : 8,
+                  width: isActive ? 28 : 8,
                   height: 8,
                   decoration: BoxDecoration(
-                    color: isActive ? Colors.white : Colors.white.withOpacity(0.4),
+                    color: isActive ? Colors.white : Colors.white.withOpacity(0.35),
                     borderRadius: BorderRadius.circular(4),
+                    boxShadow: isActive
+                        ? [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 4)]
+                        : [],
                   ),
                 );
               }),
             ),
           ),
 
-        // Image counter
         Positioned(
           top: 48,
           right: 16,
@@ -853,13 +906,9 @@ onPressed: () async {
 
   Widget _buildNoImagePlaceholder(Product product) {
     return Container(
-      color: _DetailColors.inputBg,
+      color: _DetailColors.surface,
       child: Center(
-        child: Icon(
-          Icons.shopping_bag_outlined,
-          size: 64,
-          color: _DetailColors.bordo.withOpacity(0.3),
-        ),
+        child: Icon(Icons.shopping_bag_outlined, size: 64, color: _DetailColors.bordo.withOpacity(0.3)),
       ),
     );
   }
@@ -868,23 +917,16 @@ onPressed: () async {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
-        color: _DetailColors.bordo.withOpacity(0.12),
+        color: _DetailColors.bordo.withOpacity(0.1),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: _DetailColors.bordo.withOpacity(0.2)),
+        border: Border.all(color: _DetailColors.bordo.withOpacity(0.18)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 16, color: _DetailColors.bordo),
           const SizedBox(width: 6),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              color: _DetailColors.textPrimary,
-            ),
-          ),
+          Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: _DetailColors.textPrimary)),
         ],
       ),
     );
