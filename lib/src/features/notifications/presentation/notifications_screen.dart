@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import '../data/notification_repository.dart';
+import '../../chat/presentation/chat_detail_screen.dart';
+import '../../chat/data/chat_repository.dart';
 
 class _NotiColors {
   static const Color bordo = Color(0xFF722F37);
   static const Color bordoLight = Color(0xFF8B3A42);
   static const Color background = Color(0xFF1A1A1A);
   static const Color cardBg = Color(0xFF242424);
-  static const Color inputBg = Color(0xFF2A2A2A);
   static const Color textPrimary = Color(0xFFF5F5F5);
   static const Color textSecondary = Color(0xFFAAAAAA);
   static const Color textMuted = Color(0xFF666666);
@@ -53,6 +54,34 @@ class NotificationsScreen extends StatelessWidget {
     }
   }
 
+  void _handleNotificationTap(
+    BuildContext context,
+    AppNotification notification,
+    NotificationRepository notiRepo,
+  ) async {
+    // Mark as read
+    if (!notification.isRead) {
+      await notiRepo.markAsRead(notification.id);
+    }
+
+    // Navigate based on type
+    if (notification.type == 'message' &&
+        notification.chatRoomId != null &&
+        notification.chatRoomId!.isNotEmpty) {
+      if (context.mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ChatDetailScreen(
+              chatRoomId: notification.chatRoomId!,
+              otherUserName: notification.fromUserName ?? 'Korisnik',
+            ),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final notiRepo = NotificationRepository();
@@ -87,7 +116,7 @@ class NotificationsScreen extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Obavjestenja',
+                          'Obavještenja',
                           style: TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
@@ -95,7 +124,7 @@ class NotificationsScreen extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          'Sve vase aktivnosti na jednom mjestu',
+                          'Sve vaše aktivnosti na jednom mjestu',
                           style: TextStyle(
                             fontSize: 13,
                             color: _NotiColors.textMuted,
@@ -105,13 +134,13 @@ class NotificationsScreen extends StatelessWidget {
                     ),
                   ),
 
-                  // Mark all read button
+                  // Mark all read
                   GestureDetector(
                     onTap: () {
                       notiRepo.markAllAsRead();
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: const Text('Sva obavjestenja oznacena kao procitana'),
+                          content: const Text('Sva obavještenja označena kao pročitana'),
                           backgroundColor: _NotiColors.cardBg,
                           behavior: SnackBarBehavior.floating,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -135,7 +164,7 @@ class NotificationsScreen extends StatelessWidget {
 
             const SizedBox(height: 20),
 
-            // Notifications list
+            // List
             Expanded(
               child: StreamBuilder<List<AppNotification>>(
                 stream: notiRepo.getNotifications(),
@@ -172,7 +201,7 @@ class NotificationsScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 20),
                           const Text(
-                            'Nema obavjestenja',
+                            'Nema obavještenja',
                             style: TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.w600,
@@ -183,7 +212,7 @@ class NotificationsScreen extends StatelessWidget {
                           const Padding(
                             padding: EdgeInsets.symmetric(horizontal: 48),
                             child: Text(
-                              'Kada neko lajka vas artikal, posalje poruku ili se desi nesto novo, pojavit ce se ovdje.',
+                              'Kada neko lajka vaš artikal ili vam pošalje poruku, obavještenje će se pojaviti ovdje.',
                               style: TextStyle(fontSize: 14, color: _NotiColors.textMuted, height: 1.4),
                               textAlign: TextAlign.center,
                             ),
@@ -193,7 +222,7 @@ class NotificationsScreen extends StatelessWidget {
                     );
                   }
 
-                  // Group by today, yesterday, earlier
+                  // Group by today / yesterday / earlier
                   final now = DateTime.now();
                   final todayItems = <AppNotification>[];
                   final yesterdayItems = <AppNotification>[];
@@ -222,7 +251,7 @@ class NotificationsScreen extends StatelessWidget {
                         ...todayItems.map((n) => _buildNotificationTile(context, n, notiRepo)),
                       ],
                       if (yesterdayItems.isNotEmpty) ...[
-                        _buildSectionHeader('Jucer'),
+                        _buildSectionHeader('Jučer'),
                         ...yesterdayItems.map((n) => _buildNotificationTile(context, n, notiRepo)),
                       ],
                       if (earlierItems.isNotEmpty) ...[
@@ -263,8 +292,10 @@ class NotificationsScreen extends StatelessWidget {
   ) {
     final iconColor = _getNotificationColor(notification.type);
     final icon = _getNotificationIcon(notification.type);
+    final isTappable = notification.type == 'message' &&
+        notification.chatRoomId != null &&
+        notification.chatRoomId!.isNotEmpty;
 
-    // Format time
     String timeText = '';
     if (notification.timestamp != null) {
       final diff = DateTime.now().difference(notification.timestamp!);
@@ -294,11 +325,7 @@ class NotificationsScreen extends StatelessWidget {
       ),
       onDismissed: (_) => notiRepo.deleteNotification(notification.id),
       child: GestureDetector(
-        onTap: () {
-          if (!notification.isRead) {
-            notiRepo.markAsRead(notification.id);
-          }
-        },
+        onTap: () => _handleNotificationTap(context, notification, notiRepo),
         child: Container(
           margin: const EdgeInsets.only(bottom: 6),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
@@ -308,8 +335,8 @@ class NotificationsScreen extends StatelessWidget {
                 : _NotiColors.bordo.withOpacity(0.06),
             borderRadius: BorderRadius.circular(14),
             border: notification.isRead
-                ? null
-                : Border.all(color: _NotiColors.bordo.withOpacity(0.1)),
+                ? Border.all(color: _NotiColors.textMuted.withOpacity(0.08))
+                : Border.all(color: _NotiColors.bordo.withOpacity(0.15)),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -338,7 +365,9 @@ class NotificationsScreen extends StatelessWidget {
                             notification.title,
                             style: TextStyle(
                               fontSize: 14,
-                              fontWeight: notification.isRead ? FontWeight.w500 : FontWeight.w700,
+                              fontWeight: notification.isRead
+                                  ? FontWeight.w500
+                                  : FontWeight.w700,
                               color: _NotiColors.textPrimary,
                             ),
                           ),
@@ -366,15 +395,37 @@ class NotificationsScreen extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 6),
-                    Text(
-                      timeText,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: notification.isRead
-                            ? _NotiColors.textMuted.withOpacity(0.6)
-                            : _NotiColors.bordoLight,
-                        fontWeight: FontWeight.w500,
-                      ),
+                    Row(
+                      children: [
+                        Text(
+                          timeText,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: notification.isRead
+                                ? _NotiColors.textMuted.withOpacity(0.6)
+                                : _NotiColors.bordoLight,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        if (isTappable) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: _NotiColors.blue.withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Text(
+                              'Otvori chat →',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: _NotiColors.blue,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ],
                 ),

@@ -7,6 +7,7 @@ class AppNotification {
   final String title;
   final String body;
   final String? productId;
+  final String? chatRoomId;
   final String? fromUserId;
   final String? fromUserName;
   final DateTime? timestamp;
@@ -18,6 +19,7 @@ class AppNotification {
     required this.title,
     required this.body,
     this.productId,
+    this.chatRoomId,
     this.fromUserId,
     this.fromUserName,
     this.timestamp,
@@ -36,6 +38,7 @@ class AppNotification {
       title: map['title']?.toString() ?? '',
       body: map['body']?.toString() ?? '',
       productId: map['productId']?.toString(),
+      chatRoomId: map['chatRoomId']?.toString(),
       fromUserId: map['fromUserId']?.toString(),
       fromUserName: map['fromUserName']?.toString(),
       timestamp: parsedTime,
@@ -55,9 +58,13 @@ class NotificationRepository {
     required String title,
     required String body,
     String? productId,
+    String? chatRoomId,
   }) async {
     final currentUser = _auth.currentUser;
     if (currentUser == null) return;
+
+    // Don't notify yourself
+    if (toUserId == currentUser.uid) return;
 
     await _firestore
         .collection('users')
@@ -68,6 +75,7 @@ class NotificationRepository {
       'title': title,
       'body': body,
       'productId': productId ?? '',
+      'chatRoomId': chatRoomId ?? '',
       'fromUserId': currentUser.uid,
       'fromUserName': currentUser.displayName ?? currentUser.email ?? 'Korisnik',
       'timestamp': FieldValue.serverTimestamp(),

@@ -1,10 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../domain/chat_message.dart';
+import '../../notifications/data/notification_repository.dart';
 
 class ChatRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final NotificationRepository _notiRepo = NotificationRepository();
 
   /// Creates or finds existing chat room for a product between two users
   Future<String> getOrCreateChatRoom({
@@ -21,23 +23,20 @@ class ChatRepository {
     final currentName = currentUser.displayName ?? currentUser.email ?? 'Korisnik';
 
     // Look for existing chat room with same participants and product
-    Query query = _firestore
+    final snapshot = await _firestore
         .collection('chatRooms')
-        .where('participants', arrayContains: currentUid);
-
-    final snapshot = await query.get();
+        .where('participants', arrayContains: currentUid)
+        .get();
 
     for (final doc in snapshot.docs) {
-      final data = doc.data() as Map<String, dynamic>;
+      final data = doc.data();
       final participants = List<String>.from(data['participants'] ?? []);
       final roomProductId = data['productId']?.toString();
 
       if (participants.contains(otherUserId)) {
-        // If product-specific chat, match product too
         if (productId != null && roomProductId == productId) {
           return doc.id;
         }
-        // If general chat (no product), match no-product rooms
         if (productId == null && (roomProductId == null || roomProductId.isEmpty)) {
           return doc.id;
         }
@@ -67,7 +66,7 @@ class ChatRepository {
     return roomRef.id;
   }
 
-  /// Send a message in a chat room
+  /// Send a message and notify the other participant
   Future<void> sendMessage(String chatRoomId, String text) async {
     final currentUser = _auth.currentUser;
     if (currentUser == null) throw Exception('Korisnik nije prijavljen');
@@ -95,9 +94,12 @@ class ChatRepository {
     final roomData = roomDoc.data();
     if (roomData != null) {
       final participants = List<String>.from(roomData['participants'] ?? []);
-      final otherUserId = participants.firstWhere((id) => id != currentUid, orElse: () => '');
+      final otherUserId = participants.firstWhere(
+        (id) => id != currentUid,
+        orElse: () => '',
+      );
 
-      // Update chat room with last message info and increment unread for other user
+      // Update chat room metadata
       Map<String, dynamic> updateData = {
         'lastMessage': text.trim(),
         'lastMessageTime': FieldValue.serverTimestamp(),
@@ -109,6 +111,25 @@ class ChatRepository {
       }
 
       await _firestore.collection('chatRooms').doc(chatRoomId).update(updateData);
+
+      // Send in-app notification to the other user
+      if (otherUserId.isNotEmpty) {
+        final productTitle = roomData['productTitle']?.toString() ?? '';
+        final notifBody = productTitle.isNotEmpty
+            ? '$currentName: $text'
+            : '$currentName vam je poslao poruku';
+
+        await _notiRepo.createNotification(
+          toUserId: otherUserId,
+          type: 'message',
+          title: productTitle.isNotEmpty
+              ? 'Nova poruka o: $productTitle'
+              : 'Nova poruka',
+          body: notifBody,
+          productId: roomData['productId']?.toString(),
+          chatRoomId: chatRoomId,
+        );
+      }
     }
   }
 
@@ -174,9 +195,8 @@ class ChatRepository {
     });
   }
 
-  /// Delete a chat room
+  /// Delete a chat room and all its messages
   Future<void> deleteChatRoom(String chatRoomId) async {
-    // Delete all messages first
     final messages = await _firestore
         .collection('chatRooms')
         .doc(chatRoomId)
