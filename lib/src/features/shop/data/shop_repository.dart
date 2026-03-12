@@ -74,6 +74,26 @@ class ShopRepository {
     }
   }
 
+  // Update an existing product
+  Future<void> updateProduct(
+    String productId,
+    String title,
+    double price,
+    String category, {
+    required List<String> imageUrls,
+    String description = '',
+    String condition = 'Novo',
+  }) async {
+    await _firestore.collection('products').doc(productId).update({
+      'title': title,
+      'price': price,
+      'category': category,
+      'imageUrls': imageUrls,
+      'description': description,
+      'condition': condition,
+    });
+  }
+
   // Stream all products ordered by newest first
   Stream<List<Product>> getProducts() {
     return _firestore

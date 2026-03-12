@@ -4,6 +4,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../data/shop_repository.dart';
 import '../domain/product.dart';
+import 'edit_product_screen.dart';
+import 'seller_profile_screen.dart';
 import '../../chat/data/chat_repository.dart';
 import '../../chat/presentation/chat_detail_screen.dart';
 import '../../notifications/data/notification_repository.dart';
@@ -366,6 +368,18 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     }
   }
 
+  void _openEditScreen() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EditProductScreen(product: widget.product),
+      ),
+    );
+    if (result == true && mounted) {
+      Navigator.pop(context, true);
+    }
+  }
+
   void _confirmDelete() {
     showDialog(
       context: context,
@@ -606,7 +620,18 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                           const Text('Prodavac',
                               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: _DetailColors.textPrimary)),
                           const SizedBox(height: 10),
-                          Container(
+                          GestureDetector(
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => SellerProfileScreen(
+                                  userId: product.userId,
+                                  sellerName: product.sellerDisplayName,
+                                  sellerEmail: product.sellerEmail,
+                                ),
+                              ),
+                            ),
+                            child: Container(
                             padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
                               color: _DetailColors.surface,
@@ -639,7 +664,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                       ),
                                       const SizedBox(height: 2),
                                       const Text(
-                                        'Clan bordo porodice',
+                                        'Clan bordo porodice · Pogledaj profil →',
                                         style: TextStyle(fontSize: 12, color: _DetailColors.textMuted),
                                       ),
                                     ],
@@ -661,6 +686,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                   ),
                               ],
                             ),
+                          ),
                           ),
                           const SizedBox(height: 24),
                         ],
@@ -786,6 +812,31 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                             ),
 
                           if (!_isSold) const SizedBox(height: 12),
+
+                          if (!_isSold) const SizedBox(height: 12),
+
+                          SizedBox(
+                            width: double.infinity,
+                            height: 52,
+                            child: OutlinedButton.icon(
+                              onPressed: _openEditScreen,
+                              icon: const Icon(Icons.edit_rounded, color: _DetailColors.bordo),
+                              label: const Text(
+                                'UREDI ARTIKAL',
+                                style: TextStyle(
+                                  color: _DetailColors.bordo,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: 1,
+                                ),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                side: BorderSide(color: _DetailColors.bordo.withOpacity(0.5)),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                              ),
+                            ),
+                          ),
+
+                          const SizedBox(height: 12),
 
                           SizedBox(
                             width: double.infinity,
