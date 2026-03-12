@@ -6,6 +6,8 @@ import '../data/shop_repository.dart';
 import '../domain/product.dart';
 import 'edit_product_screen.dart';
 import 'seller_profile_screen.dart';
+import 'package:photo_view/photo_view.dart';
+import 'package:photo_view/photo_view_gallery.dart';
 import '../../chat/data/chat_repository.dart';
 import '../../chat/presentation/chat_detail_screen.dart';
 import '../../notifications/data/notification_repository.dart';
@@ -886,6 +888,18 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
 
+  void _openImageZoom(List<String> imageUrls, int initialIndex) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _ImageZoomScreen(
+          imageUrls: imageUrls,
+          initialIndex: initialIndex,
+        ),
+      ),
+    );
+  }
+
   Widget _buildImageCarousel(Product product) {
     return Stack(
       children: [
@@ -894,20 +908,44 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           itemCount: product.imageUrls.length,
           onPageChanged: (index) => setState(() => _currentPage = index),
           itemBuilder: (context, index) {
-            return CachedNetworkImage(
-              imageUrl: product.imageUrls[index],
-              fit: BoxFit.cover,
-              width: double.infinity,
-              placeholder: (context, url) => Container(
-                color: _DetailColors.surface,
-                child: const Center(child: CircularProgressIndicator(color: _DetailColors.bordo, strokeWidth: 2)),
-              ),
-              errorWidget: (context, url, error) => Container(
-                color: _DetailColors.surface,
-                child: const Icon(Icons.broken_image_rounded, color: _DetailColors.textMuted, size: 48),
+            return GestureDetector(
+              onTap: () => _openImageZoom(product.imageUrls, index),
+              child: CachedNetworkImage(
+                imageUrl: product.imageUrls[index],
+                fit: BoxFit.cover,
+                width: double.infinity,
+                placeholder: (context, url) => Container(
+                  color: _DetailColors.surface,
+                  child: const Center(child: CircularProgressIndicator(color: _DetailColors.bordo, strokeWidth: 2)),
+                ),
+                errorWidget: (context, url, error) => Container(
+                  color: _DetailColors.surface,
+                  child: const Icon(Icons.broken_image_rounded, color: _DetailColors.textMuted, size: 48),
+                ),
               ),
             );
           },
+        ),
+
+        // Zoom hint
+        Positioned(
+          top: 48,
+          left: 16,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.45),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.zoom_in_rounded, color: Colors.white, size: 14),
+                SizedBox(width: 4),
+                Text('Tapni za zoom', style: TextStyle(color: Colors.white, fontSize: 11)),
+              ],
+            ),
+          ),
         ),
 
         if (product.imageUrls.length > 1)
@@ -986,5 +1024,127 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   String _formatDate(DateTime date) {
     final months = ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'avg', 'sep', 'okt', 'nov', 'dec'];
     return '${date.day}. ${months[date.month - 1]} ${date.year}.';
+  }
+}
+
+class _ImageZoomScreen extends StatefulWidget {
+  final List<String> imageUrls;
+  final int initialIndex;
+
+  const _ImageZoomScreen({
+    required this.imageUrls,
+    required this.initialIndex,
+  });
+
+  @override
+  State<_ImageZoomScreen> createState() => _ImageZoomScreenState();
+}
+
+class _ImageZoomScreenState extends State<_ImageZoomScreen> {
+  late int _currentIndex;
+  late PageController _pageController;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.initialIndex;
+    _pageController = PageController(initialPage: widget.initialIndex);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          // Gallery with zoom
+          PhotoViewGallery.builder(
+            pageController: _pageController,
+            itemCount: widget.imageUrls.length,
+            onPageChanged: (index) => setState(() => _currentIndex = index),
+            builder: (context, index) {
+              return PhotoViewGalleryPageOptions(
+                imageProvider: CachedNetworkImageProvider(widget.imageUrls[index]),
+                minScale: PhotoViewComputedScale.contained,
+                maxScale: PhotoViewComputedScale.covered * 3,
+                heroAttributes: PhotoViewHeroAttributes(tag: widget.imageUrls[index]),
+              );
+            },
+            loadingBuilder: (context, event) => const Center(
+              child: CircularProgressIndicator(color: Color(0xFF722F37), strokeWidth: 2),
+            ),
+            backgroundDecoration: const BoxDecoration(color: Colors.black),
+          ),
+
+          // Top bar
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  // Close button
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.5),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.close_rounded, color: Colors.white, size: 22),
+                    ),
+                  ),
+                  // Counter
+                  if (widget.imageUrls.length > 1)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.5),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        '${_currentIndex + 1} / ${widget.imageUrls.length}',
+                        style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+
+          // Bottom dots
+          if (widget.imageUrls.length > 1)
+            Positioned(
+              bottom: 32,
+              left: 0,
+              right: 0,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(widget.imageUrls.length, (index) {
+                  final isActive = index == _currentIndex;
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    width: isActive ? 24 : 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: isActive ? Colors.white : Colors.white.withOpacity(0.35),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  );
+                }),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }
