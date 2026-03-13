@@ -11,6 +11,9 @@ import 'package:photo_view/photo_view_gallery.dart';
 import '../../chat/data/chat_repository.dart';
 import '../../chat/presentation/chat_detail_screen.dart';
 import '../../notifications/data/notification_repository.dart';
+import '../../authentication/data/review_repository.dart';
+import '../../authentication/domain/review.dart';
+import '../../authentication/data/user_repository.dart';
 
 class _DetailColors {
   static const Color bordo = Color(0xFF722F37);
@@ -315,36 +318,85 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   void _confirmMarkAsSold() {
-    showDialog(
+    final buyerController = TextEditingController();
+    showModalBottomSheet(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: _DetailColors.cardBg,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Oznaci kao prodano?',
-            style: TextStyle(color: _DetailColors.textPrimary, fontWeight: FontWeight.bold)),
-        content: const Text('Artikal ce biti oznacen kao prodan i kupci ga vise nece moci kupiti.',
-            style: TextStyle(color: _DetailColors.textSecondary, fontSize: 14)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Odustani', style: TextStyle(color: _DetailColors.textMuted)),
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
+          decoration: const BoxDecoration(
+            color: _DetailColors.cardBg,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              _markAsSold();
-            },
-            child: const Text('Oznaci', style: TextStyle(color: _DetailColors.green, fontWeight: FontWeight.w600)),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(width: 40, height: 4,
+                decoration: BoxDecoration(color: _DetailColors.textMuted.withOpacity(0.3), borderRadius: BorderRadius.circular(2))),
+              const SizedBox(height: 20),
+              const Icon(Icons.sell_rounded, color: _DetailColors.green, size: 40),
+              const SizedBox(height: 12),
+              const Text('Označi kao završen',
+                style: TextStyle(color: _DetailColors.textPrimary, fontSize: 18, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 8),
+              const Text('Možete unijeti email kupca (opciono)',
+                style: TextStyle(color: _DetailColors.textSecondary, fontSize: 14)),
+              const SizedBox(height: 16),
+              Container(
+                decoration: BoxDecoration(
+                  color: _DetailColors.inputBg,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: _DetailColors.divider),
+                ),
+                child: TextField(
+                  controller: buyerController,
+                  style: const TextStyle(color: _DetailColors.textPrimary),
+                  decoration: const InputDecoration(
+                    hintText: 'Email kupca (nije obavezno)',
+                    hintStyle: TextStyle(color: _DetailColors.textMuted),
+                    prefixIcon: Icon(Icons.person_outline, color: _DetailColors.textMuted),
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton(
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    final email = buyerController.text.trim();
+                    String? buyerUid;
+                    if (email.isNotEmpty) {
+                      final userRepo = UserRepository();
+                      buyerUid = await userRepo.getUserIdByEmail(email);
+                    }
+                    _markAsSold(soldToUserId: buyerUid);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _DetailColors.green,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text('OZNAČI KAO ZAVRŠEN',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
 
-  Future<void> _markAsSold() async {
+  Future<void> _markAsSold({String? soldToUserId}) async {
     setState(() => _isMarkingSold = true);
     try {
-      await _shopRepo.markAsSold(widget.product.id);
+      await _shopRepo.markAsSold(widget.product.id, soldToUserId: soldToUserId);
       if (mounted) {
         setState(() {
           _isSold = true;
@@ -862,6 +914,25 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                           ),
                         ],
 
+                        // === DOJAM ZA KUPCA ===
+                        if (!_isOwner && _isSold) ...[
+                          const SizedBox(height: 16),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 50,
+                            child: OutlinedButton.icon(
+                              onPressed: _showLeaveReviewSheet,
+                              icon: const Icon(Icons.star_outline_rounded, color: _DetailColors.accent),
+                              label: const Text('Ostavi dojam',
+                                style: TextStyle(color: _DetailColors.accent, fontWeight: FontWeight.w600)),
+                              style: OutlinedButton.styleFrom(
+                                side: BorderSide(color: _DetailColors.accent.withOpacity(0.4)),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                              ),
+                            ),
+                          ),
+                        ],
+
                         const SizedBox(height: 32),
                       ],
                     ),
@@ -871,6 +942,136 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             ),
     );
   }
+
+  void _showLeaveReviewSheet() async {
+    final reviewRepo = ReviewRepository();
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
+    final alreadyReviewed = await reviewRepo.hasReviewed(widget.product.id, currentUser.uid);
+    if (alreadyReviewed && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vec ste ostavili dojam za ovaj artikal'), behavior: SnackBarBehavior.floating),
+      );
+      return;
+    }
+
+    double selectedRating = 5.0;
+    final messageController = TextEditingController();
+
+    if (!mounted) return;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
+            decoration: const BoxDecoration(
+              color: _DetailColors.cardBg,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(width: 40, height: 4,
+                  decoration: BoxDecoration(color: _DetailColors.textMuted.withOpacity(0.3), borderRadius: BorderRadius.circular(2))),
+                const SizedBox(height: 20),
+                const Text('Ostavi dojam',
+                  style: TextStyle(color: _DetailColors.textPrimary, fontSize: 18, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 4),
+                Text('za ${widget.product.sellerDisplayName}',
+                  style: const TextStyle(color: _DetailColors.textMuted, fontSize: 14)),
+                const SizedBox(height: 20),
+                // Star rating
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(5, (i) {
+                    final starVal = (i + 1).toDouble();
+                    return GestureDetector(
+                      onTap: () => setModalState(() => selectedRating = starVal),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Icon(
+                          starVal <= selectedRating ? Icons.star_rounded : Icons.star_outline_rounded,
+                          color: _DetailColors.accent,
+                          size: 36,
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  decoration: BoxDecoration(
+                    color: _DetailColors.inputBg,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: _DetailColors.divider),
+                  ),
+                  child: TextField(
+                    controller: messageController,
+                    maxLines: 3,
+                    style: const TextStyle(color: _DetailColors.textPrimary),
+                    decoration: const InputDecoration(
+                      hintText: 'Napišite vaš dojam...',
+                      hintStyle: TextStyle(color: _DetailColors.textMuted),
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.all(14),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      if (messageController.text.trim().isEmpty) return;
+                      Navigator.pop(ctx);
+                      final userRepo = UserRepository();
+                      final reviewer = await userRepo.getUser(currentUser.uid);
+                      final review = Review(
+                        id: '',
+                        productId: widget.product.id,
+                        reviewerId: currentUser.uid,
+                        sellerId: widget.product.userId,
+                        reviewerName: reviewer?.punoIme.isNotEmpty == true
+                            ? reviewer!.punoIme
+                            : currentUser.email ?? '',
+                        reviewerAvatar: reviewer?.profilnaSlika,
+                        rating: selectedRating,
+                        poruka: messageController.text.trim(),
+                        createdAt: DateTime.now(),
+                      );
+                      await reviewRepo.addReview(review);
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Dojam uspješno ostavljen!'),
+                            backgroundColor: _DetailColors.green,
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _DetailColors.bordo,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text('POŠALJI DOJAM',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
 
   Widget _buildBackButton() {
     return Padding(

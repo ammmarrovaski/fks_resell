@@ -11,6 +11,8 @@ class Product {
   final String condition;
   final DateTime? createdAt;
   final bool isSold;
+  final bool isDeleted;
+  final String? soldToUserId;
   final String sellerEmail;
   final String sellerDisplayName;
 
@@ -25,6 +27,8 @@ class Product {
     this.condition = 'Novo',
     this.createdAt,
     this.isSold = false,
+    this.isDeleted = false,
+    this.soldToUserId,
     this.sellerEmail = '',
     this.sellerDisplayName = '',
   });
@@ -65,6 +69,8 @@ class Product {
       condition: map['condition']?.toString() ?? 'Novo',
       createdAt: parsedCreatedAt,
       isSold: map['isSold'] == true,
+      isDeleted: map['isDeleted'] == true,
+      soldToUserId: map['soldToUserId']?.toString(),
       sellerEmail: map['sellerEmail']?.toString() ?? '',
       sellerDisplayName: map['sellerDisplayName']?.toString() ?? '',
     );

@@ -97,10 +97,11 @@ class _LoginScreenState extends State<LoginScreen>
       
       // DODANA NAVIGACIJA:
       // Koristimo pushReplacement da korisnik ne može kliknuti "back" na login
-      Navigator.of(context).pushReplacement(
+      Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(
           builder: (context) => const MainShell(),
         ),
+        (route) => false,
       );
     } else {
       _pokaziPoruku("Pogrešan email ili lozinka.", isError: true);

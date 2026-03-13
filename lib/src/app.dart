@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'features/authentication/presentation/login_screen.dart';
+import 'features/authentication/presentation/guest_shell.dart';
 import 'features/authentication/presentation/onboarding_screen.dart';
  
 class App extends StatelessWidget {
@@ -75,6 +76,6 @@ class _AppEntryState extends State<_AppEntry> {
       );
     }
  
-    return _showOnboarding ? const OnboardingScreen() : const LoginScreen();
+    return _showOnboarding ? const OnboardingScreen() : const GuestShell();
   }
 }

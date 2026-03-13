@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../data/auth_repository.dart';
+import '../data/user_repository.dart';
+import '../domain/user_model.dart';
 
 // Bordo boje za FK Sarajevo temu
 class AppColors {
@@ -28,6 +30,7 @@ class _RegisterScreenState extends State<RegisterScreen>
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   final _authRepo = AuthRepository();
+  final _userRepo = UserRepository();
   final _formKey = GlobalKey<FormState>();
   
   bool _isLoading = false;
@@ -93,10 +96,20 @@ class _RegisterScreenState extends State<RegisterScreen>
     final pass = _passwordController.text.trim();
 
     setState(() => _isLoading = true);
-    final user = await _authRepo.signUp(email, pass);
+    final credential = await _authRepo.signUp(email, pass);
     setState(() => _isLoading = false);
 
-    if (user != null) {
+    if (credential != null) {
+      // Kreiraj dokument korisnika u Firestoreu
+      final newUser = UserModel(
+        uid: credential.user!.uid,
+        email: email,
+        ime: '',
+        prezime: '',
+        createdAt: DateTime.now(),
+      );
+      await _userRepo.createUser(newUser);
+
       _pokaziPoruku("Uspjesna registracija!");
       Navigator.pop(context);
     } else {
@@ -577,4 +590,3 @@ class _RegisterScreenState extends State<RegisterScreen>
     );
   }
 }
-

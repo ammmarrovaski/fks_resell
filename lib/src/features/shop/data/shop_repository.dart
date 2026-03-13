@@ -56,19 +56,12 @@ class ShopRepository {
   }
 
   // Delete a product and its images from Supabase Storage
+  // Soft delete - samo oznaci kao obrisan
   Future<void> deleteProduct(String productId, List<String> imageUrls) async {
     try {
-      // Delete images from Supabase Storage
-      for (final url in imageUrls) {
-        try {
-          await ImageUploadService.deleteImage(url);
-        } catch (_) {
-          // Image may already be deleted, continue
-        }
-      }
-
-      // Delete Firestore document
-      await _firestore.collection('products').doc(productId).delete();
+      await _firestore.collection('products').doc(productId).update({
+        'isDeleted': true,
+      });
     } catch (e) {
       rethrow;
     }
@@ -101,9 +94,10 @@ class ShopRepository {
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) {
-      return snapshot.docs.map((doc) {
-        return Product.fromMap(doc.data(), doc.id);
-      }).toList();
+      return snapshot.docs
+          .map((doc) => Product.fromMap(doc.data(), doc.id))
+          .where((p) => !p.isDeleted)
+          .toList();
     });
   }
 
@@ -115,17 +109,19 @@ class ShopRepository {
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) {
-      return snapshot.docs.map((doc) {
-        return Product.fromMap(doc.data(), doc.id);
-      }).toList();
+      return snapshot.docs
+          .map((doc) => Product.fromMap(doc.data(), doc.id))
+          .where((p) => !p.isDeleted)
+          .toList();
     });
   }
 
   // ===== MARK AS SOLD =====
 
-  Future<void> markAsSold(String productId) async {
+  Future<void> markAsSold(String productId, {String? soldToUserId}) async {
     await _firestore.collection('products').doc(productId).update({
       'isSold': true,
+      if (soldToUserId != null) 'soldToUserId': soldToUserId,
     });
   }
 

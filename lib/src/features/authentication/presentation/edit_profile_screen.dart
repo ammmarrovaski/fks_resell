@@ -1,9 +1,13 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:image_picker/image_picker.dart';
+import '../data/user_repository.dart';
+import '../domain/user_model.dart';
+import '../../shop/data/cloudinary_service.dart';
 
-class _EditColors {
+class _C {
   static const Color bordo = Color(0xFF722F37);
-  static const Color bordoLight = Color(0xFF8B3A42);
   static const Color background = Color(0xFF1A1A1A);
   static const Color cardBg = Color(0xFF242424);
   static const Color inputBg = Color(0xFF2A2A2A);
@@ -12,6 +16,7 @@ class _EditColors {
   static const Color textMuted = Color(0xFF666666);
   static const Color green = Color(0xFF4CAF50);
   static const Color red = Color(0xFFE53935);
+  static const Color divider = Color(0xFF2E2E2E);
 }
 
 class EditProfileScreen extends StatefulWidget {
@@ -23,28 +28,53 @@ class EditProfileScreen extends StatefulWidget {
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
   final _user = FirebaseAuth.instance.currentUser;
-  late final TextEditingController _nameController;
+  final _userRepo = UserRepository();
+
+  final _imeController = TextEditingController();
+  final _prezimeController = TextEditingController();
+  final _telefonController = TextEditingController();
+  final _bioController = TextEditingController();
+
+  UserModel? _userModel;
+  String? _selectedSpol;
+  DateTime? _selectedDatum;
+  File? _newProfilnaSlika;
   bool _isSaving = false;
-  bool _hasChanges = false;
+  bool _isLoading = true;
+
+  static const List<String> _spolovi = ['Muški', 'Ženski', 'Drugo'];
 
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController(text: _user?.displayName ?? '');
-    _nameController.addListener(_onFieldChanged);
+    _loadUser();
   }
 
   @override
   void dispose() {
-    _nameController.removeListener(_onFieldChanged);
-    _nameController.dispose();
+    _imeController.dispose();
+    _prezimeController.dispose();
+    _telefonController.dispose();
+    _bioController.dispose();
     super.dispose();
   }
 
-  void _onFieldChanged() {
-    final changed = _nameController.text.trim() != (_user?.displayName ?? '');
-    if (changed != _hasChanges) {
-      setState(() => _hasChanges = changed);
+  Future<void> _loadUser() async {
+    if (_user == null) return;
+    final model = await _userRepo.getUser(_user!.uid);
+    if (model != null && mounted) {
+      setState(() {
+        _userModel = model;
+        _imeController.text = model.ime;
+        _prezimeController.text = model.prezime;
+        _telefonController.text = model.telefon ?? '';
+        _bioController.text = model.bio ?? '';
+        _selectedSpol = model.spol;
+        _selectedDatum = model.datumRodjenja;
+        _isLoading = false;
+      });
+    } else {
+      setState(() => _isLoading = false);
     }
   }
 
@@ -53,7 +83,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: isError ? _EditColors.red : _EditColors.green,
+        backgroundColor: isError ? _C.red : _C.green,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         margin: const EdgeInsets.all(16),
@@ -61,399 +91,305 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
-  Future<void> _saveProfile() async {
-    final newName = _nameController.text.trim();
-
-    if (newName.isEmpty) {
-      _showSnackBar('Ime ne moze biti prazno', isError: true);
-      return;
+  Future<void> _pickProfilnaSlika() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 80,
+      maxWidth: 512,
+      maxHeight: 512,
+    );
+    if (picked != null) {
+      setState(() => _newProfilnaSlika = File(picked.path));
     }
+  }
 
-    if (newName.length < 2) {
-      _showSnackBar('Ime mora imati najmanje 2 karaktera', isError: true);
+  Future<void> _pickDatum() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDatum ?? DateTime(2000),
+      firstDate: DateTime(1940),
+      lastDate: DateTime(now.year - 13, now.month, now.day),
+      builder: (ctx, child) => Theme(
+        data: ThemeData.dark().copyWith(
+          colorScheme: const ColorScheme.dark(
+            primary: _C.bordo,
+            surface: _C.cardBg,
+          ),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked != null) setState(() => _selectedDatum = picked);
+  }
+
+  Future<void> _saveProfile() async {
+    final ime = _imeController.text.trim();
+    final prezime = _prezimeController.text.trim();
+
+    if (ime.isEmpty || prezime.isEmpty) {
+      _showSnackBar('Ime i prezime su obavezni', isError: true);
       return;
     }
 
     setState(() => _isSaving = true);
 
     try {
-      await _user?.updateDisplayName(newName);
-      await _user?.reload();
+      String? profilnaSlikaUrl = _userModel?.profilnaSlika;
 
-      _showSnackBar('Profil uspjesno azuriran');
-      if (mounted) {
-        setState(() {
-          _hasChanges = false;
-          _isSaving = false;
-        });
-        Navigator.pop(context, true);
+      if (_newProfilnaSlika != null) {
+        profilnaSlikaUrl = await ImageUploadService.uploadImage(_newProfilnaSlika!);
       }
+
+      await _user?.updateDisplayName('$ime $prezime');
+
+      await _userRepo.updateUser(_user!.uid, {
+        'ime': ime,
+        'prezime': prezime,
+        'telefon': _telefonController.text.trim(),
+        'bio': _bioController.text.trim(),
+        'spol': _selectedSpol,
+        'datumRodjenja': _selectedDatum?.toIso8601String(),
+        'profilnaSlika': profilnaSlikaUrl,
+      });
+
+      _showSnackBar('Profil uspješno ažuriran!');
+      if (mounted) Navigator.pop(context);
     } catch (e) {
-      _showSnackBar('Greska pri cuvanju profila', isError: true);
+      _showSnackBar('Greška pri čuvanju profila', isError: true);
+    } finally {
       if (mounted) setState(() => _isSaving = false);
     }
   }
 
+  String _formatDatum(DateTime d) =>
+      '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}';
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _EditColors.background,
+      backgroundColor: _C.background,
       appBar: AppBar(
-        backgroundColor: _EditColors.background,
-        foregroundColor: _EditColors.textPrimary,
+        backgroundColor: _C.background,
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: _C.textPrimary, size: 20),
+          onPressed: () => Navigator.pop(context),
+        ),
         title: const Text(
           'Uredi profil',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+          style: TextStyle(color: _C.textPrimary, fontWeight: FontWeight.w700, fontSize: 18),
         ),
-        leading: IconButton(
-          icon: Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: _EditColors.cardBg,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(Icons.arrow_back_rounded, size: 20),
-          ),
-          onPressed: () {
-            if (_hasChanges) {
-              _showDiscardDialog();
-            } else {
-              Navigator.pop(context);
-            }
-          },
-        ),
+        centerTitle: true,
         actions: [
-          if (_hasChanges)
-            Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: TextButton(
-                onPressed: _isSaving ? null : _saveProfile,
-                child: Text(
-                  'Sacuvaj',
-                  style: TextStyle(
-                    color: _isSaving ? _EditColors.textMuted : _EditColors.bordo,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 15,
-                  ),
-                ),
-              ),
+          if (!_isLoading)
+            TextButton(
+              onPressed: _isSaving ? null : _saveProfile,
+              child: _isSaving
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(color: _C.bordo, strokeWidth: 2),
+                    )
+                  : const Text(
+                      'Sačuvaj',
+                      style: TextStyle(color: _C.bordo, fontWeight: FontWeight.w700, fontSize: 15),
+                    ),
             ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: Column(
-          children: [
-            const SizedBox(height: 32),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator(color: _C.bordo))
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Profilna slika
+                  Center(
+                    child: GestureDetector(
+                      onTap: _pickProfilnaSlika,
+                      child: Stack(
+                        children: [
+                          Container(
+                            width: 100,
+                            height: 100,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: _C.cardBg,
+                              border: Border.all(color: _C.bordo.withOpacity(0.4), width: 2),
+                              image: _newProfilnaSlika != null
+                                  ? DecorationImage(image: FileImage(_newProfilnaSlika!), fit: BoxFit.cover)
+                                  : _userModel?.profilnaSlika != null
+                                      ? DecorationImage(image: NetworkImage(_userModel!.profilnaSlika!), fit: BoxFit.cover)
+                                      : null,
+                            ),
+                            child: (_newProfilnaSlika == null && _userModel?.profilnaSlika == null)
+                                ? const Icon(Icons.person_rounded, color: _C.textMuted, size: 48)
+                                : null,
+                          ),
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: Container(
+                              width: 30,
+                              height: 30,
+                              decoration: const BoxDecoration(color: _C.bordo, shape: BoxShape.circle),
+                              child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 16),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Center(
+                    child: Text('Tapni za promjenu slike', style: TextStyle(color: _C.textMuted, fontSize: 12)),
+                  ),
+                  const SizedBox(height: 32),
 
-            // Avatar section
-            Stack(
+                  _sectionHeader('LIČNI PODACI'),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(child: _inputField(_imeController, 'Ime', Icons.person_outline)),
+                      const SizedBox(width: 12),
+                      Expanded(child: _inputField(_prezimeController, 'Prezime', Icons.person_outline)),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  _readOnlyField(label: 'Email', value: _user?.email ?? '', icon: Icons.email_outlined),
+                  const SizedBox(height: 12),
+                  _inputField(_telefonController, 'Broj telefona', Icons.phone_outlined, keyboardType: TextInputType.phone),
+                  const SizedBox(height: 12),
+                  _dropdownField(),
+                  const SizedBox(height: 12),
+                  _datumField(),
+                  const SizedBox(height: 24),
+
+                  _sectionHeader('O MENI'),
+                  const SizedBox(height: 12),
+                  _inputField(_bioController, 'Kratki opis (bio)', Icons.info_outline_rounded, maxLines: 3),
+                  const SizedBox(height: 40),
+                ],
+              ),
+            ),
+    );
+  }
+
+  Widget _sectionHeader(String title) => Text(
+        title,
+        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _C.textMuted, letterSpacing: 1.2),
+      );
+
+  Widget _inputField(TextEditingController controller, String label, IconData icon,
+      {TextInputType? keyboardType, int maxLines = 1}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: _C.inputBg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _C.divider),
+      ),
+      child: TextField(
+        controller: controller,
+        keyboardType: keyboardType,
+        maxLines: maxLines,
+        style: const TextStyle(color: _C.textPrimary, fontSize: 15),
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: const TextStyle(color: _C.textMuted, fontSize: 13),
+          prefixIcon: Icon(icon, color: _C.textMuted, size: 20),
+          border: InputBorder.none,
+          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: maxLines > 1 ? 14 : 0),
+        ),
+      ),
+    );
+  }
+
+  Widget _readOnlyField({required String label, required String value, required IconData icon}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: _C.inputBg.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _C.divider),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: _C.textMuted, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 100,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: _EditColors.bordo.withOpacity(0.2),
-                    border: Border.all(
-                      color: _EditColors.bordo.withOpacity(0.5),
-                      width: 3,
-                    ),
-                  ),
-                  child: const Icon(
-                    Icons.person_rounded,
-                    size: 50,
-                    color: _EditColors.bordo,
-                  ),
-                ),
-                Positioned(
-                  bottom: 0,
-                  right: 0,
-                  child: GestureDetector(
-                    onTap: () {
-                      _showSnackBar('Upload profilne slike - uskoro dostupno');
-                    },
-                    child: Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: _EditColors.bordo,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: _EditColors.background,
-                          width: 3,
-                        ),
-                      ),
-                      child: const Icon(
-                        Icons.camera_alt_rounded,
-                        color: Colors.white,
-                        size: 16,
-                      ),
-                    ),
-                  ),
-                ),
+                Text(label, style: const TextStyle(color: _C.textMuted, fontSize: 11)),
+                const SizedBox(height: 2),
+                Text(value, style: const TextStyle(color: _C.textSecondary, fontSize: 15)),
               ],
             ),
+          ),
+          const Icon(Icons.lock_rounded, color: _C.textMuted, size: 16),
+        ],
+      ),
+    );
+  }
 
-            const SizedBox(height: 12),
-            Text(
-              _user?.email ?? '',
-              style: const TextStyle(
-                fontSize: 14,
-                color: _EditColors.textMuted,
+  Widget _dropdownField() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: _C.inputBg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _C.divider),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.wc_rounded, color: _C.textMuted, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: _selectedSpol,
+                hint: const Text('Spol', style: TextStyle(color: _C.textMuted, fontSize: 15)),
+                dropdownColor: _C.cardBg,
+                style: const TextStyle(color: _C.textPrimary, fontSize: 15),
+                icon: const Icon(Icons.keyboard_arrow_down_rounded, color: _C.textMuted),
+                items: _spolovi.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                onChanged: (val) => setState(() => _selectedSpol = val),
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
 
-            const SizedBox(height: 40),
-
-            // Name field
-            _buildFieldSection(
-              label: 'Ime i prezime',
-              child: TextField(
-                controller: _nameController,
-                style: const TextStyle(
-                  color: _EditColors.textPrimary,
-                  fontSize: 16,
-                ),
-                decoration: InputDecoration(
-                  hintText: 'Unesite vase ime',
-                  hintStyle: const TextStyle(color: _EditColors.textMuted),
-                  prefixIcon: const Icon(
-                    Icons.person_outline,
-                    color: _EditColors.textMuted,
-                    size: 22,
-                  ),
-                  filled: true,
-                  fillColor: _EditColors.inputBg,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide.none,
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide(
-                      color: _EditColors.textMuted.withOpacity(0.2),
-                    ),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(
-                      color: _EditColors.bordo,
-                      width: 2,
-                    ),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 16,
-                  ),
-                ),
+  Widget _datumField() {
+    return GestureDetector(
+      onTap: _pickDatum,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        decoration: BoxDecoration(
+          color: _C.inputBg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: _C.divider),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.cake_outlined, color: _C.textMuted, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                _selectedDatum != null ? _formatDatum(_selectedDatum!) : 'Datum rođenja',
+                style: TextStyle(color: _selectedDatum != null ? _C.textPrimary : _C.textMuted, fontSize: 15),
               ),
             ),
-
-            const SizedBox(height: 20),
-
-            // Email (read-only)
-            _buildFieldSection(
-              label: 'Email adresa',
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: _EditColors.inputBg,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: _EditColors.textMuted.withOpacity(0.1),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.email_outlined,
-                      color: _EditColors.textMuted,
-                      size: 22,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        _user?.email ?? 'Nije dostupno',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          color: _EditColors.textMuted,
-                        ),
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: _EditColors.textMuted.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: const Text(
-                        'Ne moze se mijenjati',
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: _EditColors.textMuted,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 20),
-
-            // Account created date (read-only)
-            _buildFieldSection(
-              label: 'Nalog kreiran',
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: _EditColors.inputBg,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: _EditColors.textMuted.withOpacity(0.1),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.calendar_today_outlined,
-                      color: _EditColors.textMuted,
-                      size: 22,
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      _user?.metadata.creationTime != null
-                          ? _formatDate(_user!.metadata.creationTime!)
-                          : 'Nepoznato',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        color: _EditColors.textMuted,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 40),
-
-            // Save button
-            SizedBox(
-              width: double.infinity,
-              height: 56,
-              child: ElevatedButton(
-                onPressed: _hasChanges && !_isSaving ? _saveProfile : null,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _EditColors.bordo,
-                  foregroundColor: Colors.white,
-                  disabledBackgroundColor: _EditColors.bordo.withOpacity(0.3),
-                  disabledForegroundColor: Colors.white.withOpacity(0.3),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  elevation: 0,
-                ),
-                child: _isSaving
-                    ? const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2.5,
-                        ),
-                      )
-                    : const Text(
-                        'SACUVAJ PROMJENE',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1,
-                        ),
-                      ),
-              ),
-            ),
-
-            const SizedBox(height: 40),
+            const Icon(Icons.keyboard_arrow_down_rounded, color: _C.textMuted),
           ],
         ),
       ),
     );
-  }
-
-  Widget _buildFieldSection({required String label, required Widget child}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 8),
-          child: Text(
-            label,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              color: _EditColors.textSecondary,
-            ),
-          ),
-        ),
-        child,
-      ],
-    );
-  }
-
-  void _showDiscardDialog() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: _EditColors.cardBg,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
-          'Odbaciti promjene?',
-          style: TextStyle(
-            color: _EditColors.textPrimary,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        content: const Text(
-          'Imate nesacuvane promjene. Da li zelite da ih odbacite?',
-          style: TextStyle(color: _EditColors.textSecondary, fontSize: 14),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text(
-              'Nastavi uredjivanje',
-              style: TextStyle(color: _EditColors.textMuted),
-            ),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              Navigator.pop(context);
-            },
-            child: const Text(
-              'Odbaci',
-              style: TextStyle(
-                color: _EditColors.red,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _formatDate(DateTime date) {
-    const months = [
-      'januar', 'februar', 'mart', 'april', 'maj', 'juni',
-      'juli', 'august', 'septembar', 'oktobar', 'novembar', 'decembar'
-    ];
-    return '${date.day}. ${months[date.month - 1]} ${date.year}.';
   }
 }
