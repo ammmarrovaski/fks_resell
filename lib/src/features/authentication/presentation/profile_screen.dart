@@ -25,15 +25,21 @@ class _ProfileColors {
   static const Color green = Color(0xFF4CAF50);
 }
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({Key? key}) : super(key: key);
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  final shopRepo = ShopRepository();
+  final userRepo = UserRepository();
+  final authRepo = AuthRepository();
 
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
-    final shopRepo = ShopRepository();
-    final userRepo = UserRepository();
-    final authRepo = AuthRepository();
 
     return StreamBuilder<UserModel?>(
       stream: user != null ? userRepo.watchUser(user.uid) : const Stream.empty(),
