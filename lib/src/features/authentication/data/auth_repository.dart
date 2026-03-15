@@ -3,7 +3,6 @@ import 'package:google_sign_in/google_sign_in.dart';
 
 class AuthRepository {
   final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
-  // Konstruktor bez parametara sada mora raditi na verziji 6.2.1
   final GoogleSignIn _googleSignIn = GoogleSignIn();
 
   // 1. Registracija
@@ -35,6 +34,9 @@ class AuthRepository {
   // 3. Google Sign-In
   Future<UserCredential?> signInWithGoogle() async {
     try {
+      // Disconnect prisiljava Google da uvijek pokaže account picker
+      await _googleSignIn.disconnect().catchError((_) {});
+
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
       if (googleUser == null) return null;
 
@@ -60,5 +62,22 @@ class AuthRepository {
       print("Guest greška: $e");
       return null;
     }
+  }
+
+  // 5. Reset lozinke
+  Future<bool> resetPassword(String email) async {
+    try {
+      await _firebaseAuth.sendPasswordResetEmail(email: email);
+      return true;
+    } catch (e) {
+      print("Reset lozinke greška: $e");
+      return false;
+    }
+  }
+
+  // 6. Sign Out (Firebase + Google)
+  Future<void> signOut() async {
+    await _googleSignIn.signOut();
+    await _firebaseAuth.signOut();
   }
 }

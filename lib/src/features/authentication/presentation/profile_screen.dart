@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../shop/data/shop_repository.dart';
+import '../data/auth_repository.dart';
 import '../data/user_repository.dart';
 import '../domain/user_model.dart';
 import 'login_screen.dart';
@@ -32,6 +33,7 @@ class ProfileScreen extends StatelessWidget {
     final user = FirebaseAuth.instance.currentUser;
     final shopRepo = ShopRepository();
     final userRepo = UserRepository();
+    final authRepo = AuthRepository();
 
     return StreamBuilder<UserModel?>(
       stream: user != null ? userRepo.watchUser(user.uid) : const Stream.empty(),
@@ -270,7 +272,8 @@ class ProfileScreen extends StatelessWidget {
                     height: 52,
                     child: OutlinedButton.icon(
                       onPressed: () async {
-                        await FirebaseAuth.instance.signOut();
+                        // Odjavljuje i iz Firebasea i iz Googlea
+                        await authRepo.signOut();
                         if (context.mounted) {
                           Navigator.of(context).pushAndRemoveUntil(
                             MaterialPageRoute(builder: (context) => const LoginScreen()),

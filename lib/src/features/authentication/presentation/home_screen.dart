@@ -3,6 +3,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../shop/data/shop_repository.dart';
 import '../../shop/domain/product.dart';
 import '../../shop/presentation/product_detail_screen.dart';
+import '../data/auth_repository.dart';
+import 'users_search_screen.dart';
 
 class _HomeColors {
   static const Color bordo = Color(0xFF722F37);
@@ -1027,19 +1029,41 @@ class _HomeScreenState extends State<HomeScreen>
             ],
           ),
         ),
-        GestureDetector(
-          onTap: _toggleSearch,
-          child: Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: _HomeColors.surface,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: _HomeColors.divider),
+        Row(
+          children: [
+            GestureDetector(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const UsersSearchScreen()),
+              ),
+              child: Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: _HomeColors.surface,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: _HomeColors.divider),
+                ),
+                child: const Icon(Icons.people_outline_rounded,
+                    color: _HomeColors.textSecondary, size: 22),
+              ),
             ),
-            child: const Icon(Icons.search_rounded,
-                color: _HomeColors.textSecondary, size: 22),
-          ),
+            const SizedBox(width: 10),
+            GestureDetector(
+              onTap: _toggleSearch,
+              child: Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: _HomeColors.surface,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: _HomeColors.divider),
+                ),
+                child: const Icon(Icons.search_rounded,
+                    color: _HomeColors.textSecondary, size: 22),
+              ),
+            ),
+          ],
         ),
       ],
     );

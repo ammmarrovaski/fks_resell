@@ -22,6 +22,8 @@ class _GuestShellState extends State<GuestShell> {
   static const Color textPrimary = Color(0xFFF5F5F5);
   static const Color textSecondary = Color(0xFFB0B0B0);
   static const Color textMuted = Color(0xFF6B6B6B);
+  static const Color navBg = Color(0xFF1E1E1E);
+  static const Color inactive = Color(0xFF666666);
 
   final List<_TabConfig> _tabs = [
     _TabConfig(
@@ -86,7 +88,6 @@ class _GuestShellState extends State<GuestShell> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Handle
             Container(
               width: 40,
               height: 4,
@@ -96,8 +97,6 @@ class _GuestShellState extends State<GuestShell> {
               ),
             ),
             const SizedBox(height: 24),
-
-            // Lock icon
             Container(
               width: 64,
               height: 64,
@@ -109,86 +108,48 @@ class _GuestShellState extends State<GuestShell> {
               child: const Icon(Icons.lock_rounded, color: bordo, size: 28),
             ),
             const SizedBox(height: 16),
-
             Text(
               tab.lockedTitle ?? '',
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: textPrimary,
-              ),
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: textPrimary),
             ),
             const SizedBox(height: 8),
             Text(
               tab.lockedMessage ?? '',
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 14,
-                color: textSecondary,
-                height: 1.5,
-              ),
+              style: const TextStyle(fontSize: 14, color: textSecondary, height: 1.5),
             ),
             const SizedBox(height: 28),
-
-            // Login button
             SizedBox(
               width: double.infinity,
               height: 52,
               child: ElevatedButton(
                 onPressed: () {
                   Navigator.pop(ctx);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const LoginScreen()),
-                  );
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: bordo,
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   elevation: 0,
                 ),
-                child: const Text(
-                  'PRIJAVITE SE',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1,
-                  ),
-                ),
+                child: const Text('PRIJAVITE SE', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, letterSpacing: 1)),
               ),
             ),
             const SizedBox(height: 12),
-
-            // Register button
             SizedBox(
               width: double.infinity,
               height: 52,
               child: OutlinedButton(
                 onPressed: () {
                   Navigator.pop(ctx);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const RegisterScreen()),
-                  );
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const RegisterScreen()));
                 },
                 style: OutlinedButton.styleFrom(
                   side: BorderSide(color: bordo.withOpacity(0.5)),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
-                child: const Text(
-                  'REGISTRUJTE SE',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1,
-                    color: bordo,
-                  ),
-                ),
+                child: const Text('REGISTRUJTE SE', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, letterSpacing: 1, color: bordo)),
               ),
             ),
             const SizedBox(height: 8),
@@ -204,44 +165,109 @@ class _GuestShellState extends State<GuestShell> {
       backgroundColor: background,
       body: Stack(
         children: [
-          // Only show home screen (index 0)
           const HomeScreen(),
-
-          // Blur overlay for locked tabs
           if (_selectedIndex != 0)
             _buildLockedOverlay(_tabs[_selectedIndex]),
         ],
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _selectedIndex,
-        onDestinationSelected: _onTabSelected,
-        destinations: _tabs.map((tab) {
-          final isLocked = tab.locked;
-          return NavigationDestination(
-            icon: Stack(
-              clipBehavior: Clip.none,
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: navBg,
+          border: Border(
+            top: BorderSide(color: Colors.white.withOpacity(0.07), width: 1),
+          ),
+        ),
+        child: SafeArea(
+          child: SizedBox(
+            height: 70,
+            child: Row(
               children: [
-                Icon(tab.icon, color: isLocked ? textMuted.withOpacity(0.5) : null),
-                if (isLocked)
-                  Positioned(
-                    top: -4,
-                    right: -4,
-                    child: Container(
-                      width: 14,
-                      height: 14,
-                      decoration: BoxDecoration(
-                        color: textMuted.withOpacity(0.3),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.lock_rounded, size: 8, color: Colors.white54),
+                // Shop
+                _GuestNavItem(
+                  icon: _tabs[0].icon,
+                  selectedIcon: _tabs[0].selectedIcon,
+                  label: _tabs[0].label,
+                  selected: _selectedIndex == 0,
+                  locked: false,
+                  onTap: () => _onTabSelected(0),
+                ),
+                // Poruke
+                _GuestNavItem(
+                  icon: _tabs[2].icon,
+                  selectedIcon: _tabs[2].selectedIcon,
+                  label: _tabs[2].label,
+                  selected: _selectedIndex == 2,
+                  locked: true,
+                  onTap: () => _onTabSelected(2),
+                ),
+
+                // Objavi — srednje, istaknuto
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => _onTabSelected(1),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: _selectedIndex == 1
+                                ? bordo
+                                : bordo.withOpacity(0.15),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: bordo.withOpacity(0.5),
+                              width: 1.5,
+                            ),
+                            boxShadow: _selectedIndex == 1
+                                ? [BoxShadow(color: bordo.withOpacity(0.4), blurRadius: 12, spreadRadius: 1)]
+                                : [],
+                          ),
+                          child: Icon(
+                            _selectedIndex == 1 ? Icons.add_box : Icons.add_box_outlined,
+                            color: _selectedIndex == 1 ? Colors.white : bordo,
+                            size: 24,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Objavi',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: _selectedIndex == 1 ? bordo : inactive,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
+                ),
+
+                // Obavještenja
+                _GuestNavItem(
+                  icon: _tabs[3].icon,
+                  selectedIcon: _tabs[3].selectedIcon,
+                  label: _tabs[3].label,
+                  selected: _selectedIndex == 3,
+                  locked: true,
+                  onTap: () => _onTabSelected(3),
+                ),
+                // Profil
+                _GuestNavItem(
+                  icon: _tabs[4].icon,
+                  selectedIcon: _tabs[4].selectedIcon,
+                  label: _tabs[4].label,
+                  selected: _selectedIndex == 4,
+                  locked: true,
+                  onTap: () => _onTabSelected(4),
+                ),
               ],
             ),
-            selectedIcon: Icon(tab.selectedIcon),
-            label: tab.label,
-          );
-        }).toList(),
+          ),
+        ),
       ),
     );
   }
@@ -273,22 +299,14 @@ class _GuestShellState extends State<GuestShell> {
                       const SizedBox(height: 24),
                       Text(
                         tab.lockedTitle ?? '',
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w700,
-                          color: textPrimary,
-                        ),
+                        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: textPrimary),
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 12),
                       Text(
                         tab.lockedMessage ?? '',
                         textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          color: textSecondary,
-                          height: 1.6,
-                        ),
+                        style: const TextStyle(fontSize: 15, color: textSecondary, height: 1.6),
                       ),
                       const SizedBox(height: 32),
                       SizedBox(
@@ -299,19 +317,10 @@ class _GuestShellState extends State<GuestShell> {
                           style: ElevatedButton.styleFrom(
                             backgroundColor: bordo,
                             foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                             elevation: 0,
                           ),
-                          child: const Text(
-                            'PRIJAVITE SE',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 1,
-                            ),
-                          ),
+                          child: const Text('PRIJAVITE SE', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, letterSpacing: 1)),
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -320,26 +329,13 @@ class _GuestShellState extends State<GuestShell> {
                         height: 52,
                         child: OutlinedButton(
                           onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (_) => const RegisterScreen()),
-                            );
+                            Navigator.push(context, MaterialPageRoute(builder: (_) => const RegisterScreen()));
                           },
                           style: OutlinedButton.styleFrom(
                             side: BorderSide(color: bordo.withOpacity(0.5)),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                           ),
-                          child: const Text(
-                            'REGISTRUJTE SE',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 1,
-                              color: bordo,
-                            ),
-                          ),
+                          child: const Text('REGISTRUJTE SE', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, letterSpacing: 1, color: bordo)),
                         ),
                       ),
                     ],
@@ -348,6 +344,77 @@ class _GuestShellState extends State<GuestShell> {
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GuestNavItem extends StatelessWidget {
+  final IconData icon;
+  final IconData selectedIcon;
+  final String label;
+  final bool selected;
+  final bool locked;
+  final VoidCallback onTap;
+
+  static const Color bordo = Color(0xFF722F37);
+  static const Color active = Color(0xFF722F37);
+  static const Color inactive = Color(0xFF666666);
+
+  const _GuestNavItem({
+    required this.icon,
+    required this.selectedIcon,
+    required this.label,
+    required this.selected,
+    required this.locked,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(
+                  selected ? selectedIcon : icon,
+                  color: locked ? inactive.withOpacity(0.5) : (selected ? active : inactive),
+                  size: 24,
+                ),
+                if (locked)
+                  Positioned(
+                    top: -4,
+                    right: -4,
+                    child: Container(
+                      width: 13,
+                      height: 13,
+                      decoration: BoxDecoration(
+                        color: inactive.withOpacity(0.3),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.lock_rounded, size: 7, color: Colors.white54),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 3),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                color: locked ? inactive.withOpacity(0.5) : (selected ? active : inactive),
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
         ),
       ),
     );
