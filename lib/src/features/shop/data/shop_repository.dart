@@ -123,6 +123,16 @@ class ShopRepository {
       'isSold': true,
       if (soldToUserId != null) 'soldToUserId': soldToUserId,
     });
+
+    // Automatski dodaj u purchased kolekciju kupca
+    if (soldToUserId != null) {
+      await _firestore
+          .collection('users')
+          .doc(soldToUserId)
+          .collection('purchased')
+          .doc(productId)
+          .set({'purchasedAt': FieldValue.serverTimestamp()});
+    }
   }
 
   // ===== FAVORITES =====

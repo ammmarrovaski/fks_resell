@@ -2,6 +2,8 @@ import 'package:fks_fan_shop/src/features/authentication/presentation/main_shell
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../data/auth_repository.dart';
+import '../data/user_repository.dart';
+import '../domain/user_model.dart';
 import 'register_screen.dart';
 
 // Bordo boje za FK Sarajevo temu
@@ -272,13 +274,32 @@ class _LoginScreenState extends State<LoginScreen>
   // ✅ NOVO: Google Sign In
   void _prijaviSeGoogleom() async {
     setState(() => _isGoogleLoading = true);
-    final user = await _authRepo.signInWithGoogle();
+    final credential = await _authRepo.signInWithGoogle();
 
     if (!mounted) return;
 
     setState(() => _isGoogleLoading = false);
 
-    if (user != null) {
+    if (credential != null) {
+      // Kreiraj user dokument u Firestoreu ako ne postoji
+      final firebaseUser = credential.user;
+      if (firebaseUser != null) {
+        final userRepo = UserRepository();
+        final exists = await userRepo.userExists(firebaseUser.uid);
+        if (!exists) {
+          final nameParts = (firebaseUser.displayName ?? '').split(' ');
+          final ime = nameParts.isNotEmpty ? nameParts.first : '';
+          final prezime = nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
+          await userRepo.createUser(UserModel(
+            uid: firebaseUser.uid,
+            email: firebaseUser.email ?? '',
+            ime: ime,
+            prezime: prezime,
+            profilnaSlika: firebaseUser.photoURL,
+            createdAt: DateTime.now(),
+          ));
+        }
+      }
       _pokaziPoruku("Dobrodošli u Bordo porodicu!");
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (context) => const MainShell()),
