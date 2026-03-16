@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'features/authentication/presentation/login_screen.dart';
 import 'features/authentication/presentation/guest_shell.dart';
+import 'features/authentication/presentation/main_shell.dart';
 import 'features/authentication/presentation/onboarding_screen.dart';
- 
+
 class App extends StatelessWidget {
   final String flavor;
- 
+
   const App({Key? key, required this.flavor}) : super(key: key);
- 
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -43,25 +45,35 @@ class App extends StatelessWidget {
     );
   }
 }
- 
+
 class _AppEntry extends StatefulWidget {
   const _AppEntry();
- 
+
   @override
   State<_AppEntry> createState() => _AppEntryState();
 }
- 
+
 class _AppEntryState extends State<_AppEntry> {
   bool _loading = true;
-  bool _showOnboarding = false;
- 
+  bool _onboardingDone = false;
+
   @override
   void initState() {
     super.initState();
-    _loading = false;
-    _showOnboarding = true;
+    _init();
   }
- 
+
+  Future<void> _init() async {
+    final prefs = await SharedPreferences.getInstance();
+    final done = prefs.getBool('onboarding_done') ?? false;
+    if (mounted) {
+      setState(() {
+        _onboardingDone = done;
+        _loading = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -75,7 +87,18 @@ class _AppEntryState extends State<_AppEntry> {
         ),
       );
     }
- 
-    return _showOnboarding ? const OnboardingScreen() : const GuestShell();
+
+    // Ako onboarding nije završen — pokaži ga
+    if (!_onboardingDone) {
+      return const OnboardingScreen();
+    }
+
+    // Onboarding je završen — provjeri auth stanje
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      return const MainShell();
+    } else {
+      return const GuestShell();
+    }
   }
 }
