@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../data/user_repository.dart';
+import '../domain/user_model.dart';
 import 'guest_shell.dart';
+import 'main_shell.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({Key? key}) : super(key: key);
@@ -11,7 +15,13 @@ class OnboardingScreen extends StatefulWidget {
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
   final _pageController = PageController();
+  final _imeController = TextEditingController();
+  final _prezimeController = TextEditingController();
+  final _userRepo = UserRepository();
+
   int _currentPage = 0;
+  bool _isLoading = false;
+  String? _errorText;
 
   static const Color bordo = Color(0xFF722F37);
   static const Color bordoLight = Color(0xFF8B3A42);
@@ -43,30 +53,111 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     ),
   ];
 
-  Future<void> _completeOnboarding() async {
-    if (mounted) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const GuestShell()),
-      );
-    }
-  }
-
-  void _nextPage() {
-    if (_currentPage < _pages.length - 1) {
-      _pageController.nextPage(
-        duration: const Duration(milliseconds: 350),
-        curve: Curves.easeOutCubic,
-      );
-    } else {
-      _completeOnboarding();
-    }
-  }
+  // Ukupno stranica = info stranice + forma (ako je prijavljen)
+  bool get _isLoggedIn => FirebaseAuth.instance.currentUser != null;
+  bool get _isLastInfoPage => _currentPage == _pages.length - 1;
+  bool get _isFormPage => _currentPage == _pages.length;
+  int get _totalPages => _isLoggedIn ? _pages.length + 1 : _pages.length;
 
   @override
   void dispose() {
     _pageController.dispose();
+    _imeController.dispose();
+    _prezimeController.dispose();
     super.dispose();
+  }
+
+  Future<void> _completeOnboarding() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('onboarding_done', true);
+
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const GuestShell()),
+    );
+  }
+
+  Future<void> _submitForm() async {
+    final ime = _imeController.text.trim();
+    final prezime = _prezimeController.text.trim();
+
+    if (ime.isEmpty) {
+      setState(() => _errorText = 'Unesite ime');
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _errorText = null;
+    });
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        final exists = await _userRepo.userExists(user.uid);
+        if (!exists) {
+          await _userRepo.createUser(UserModel(
+            uid: user.uid,
+            email: user.email ?? '',
+            ime: ime,
+            prezime: prezime,
+            profilnaSlika: user.photoURL,
+            createdAt: DateTime.now(),
+          ));
+        } else {
+          await _userRepo.updateUser(user.uid, {
+            'ime': ime,
+            'prezime': prezime,
+          });
+        }
+      }
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('onboarding_done', true);
+
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const MainShell()),
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorText = 'Greška pri čuvanju podataka. Pokušajte ponovo.';
+        });
+      }
+    }
+  }
+
+  void _nextPage() {
+    if (_isFormPage) {
+      _submitForm();
+      return;
+    }
+
+    if (_isLastInfoPage && _isLoggedIn) {
+      // Idi na formu
+      _pageController.nextPage(
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeOutCubic,
+      );
+    } else if (_isLastInfoPage) {
+      _completeOnboarding();
+    } else {
+      _pageController.nextPage(
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeOutCubic,
+      );
+    }
+  }
+
+  String get _buttonLabel {
+    if (_isFormPage) return 'ZAVRŠI';
+    if (_isLastInfoPage && _isLoggedIn) return 'DALJE';
+    if (_isLastInfoPage) return 'POČNI';
+    return 'DALJE';
   }
 
   @override
@@ -75,12 +166,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       backgroundColor: background,
       body: Stack(
         children: [
-          // Pages
-          PageView.builder(
+          PageView(
             controller: _pageController,
-            itemCount: _pages.length,
+            physics: const NeverScrollableScrollPhysics(),
             onPageChanged: (index) => setState(() => _currentPage = index),
-            itemBuilder: (context, index) => _buildPage(_pages[index]),
+            children: [
+              ..._pages.map((p) => _buildInfoPage(p)),
+              if (_isLoggedIn) _buildFormPage(),
+            ],
           ),
 
           // Bottom controls
@@ -89,13 +182,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             left: 0,
             right: 0,
             child: Container(
-              padding: EdgeInsets.fromLTRB(32, 24, 32, MediaQuery.of(context).padding.bottom + 32),
+              padding: EdgeInsets.fromLTRB(
+                  32, 24, 32, MediaQuery.of(context).padding.bottom + 32),
               child: Column(
                 children: [
                   // Dots
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
-                    children: List.generate(_pages.length, (index) {
+                    children: List.generate(_totalPages, (index) {
                       final isActive = index == _currentPage;
                       return AnimatedContainer(
                         duration: const Duration(milliseconds: 300),
@@ -104,7 +198,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         width: isActive ? 32 : 8,
                         height: 8,
                         decoration: BoxDecoration(
-                          color: isActive ? bordo : textMuted.withOpacity(0.4),
+                          color: isActive
+                              ? bordo
+                              : textMuted.withOpacity(0.4),
                           borderRadius: BorderRadius.circular(4),
                         ),
                       );
@@ -113,39 +209,67 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
                   const SizedBox(height: 32),
 
-                  // Next / Start button
+                  // Button
                   SizedBox(
                     width: double.infinity,
                     height: 56,
                     child: ElevatedButton(
-                      onPressed: _nextPage,
+                      onPressed: _isLoading ? null : _nextPage,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: bordo,
                         foregroundColor: Colors.white,
+                        disabledBackgroundColor: bordo.withOpacity(0.5),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
+                            borderRadius: BorderRadius.circular(16)),
                         elevation: 0,
                       ),
-                      child: Text(
-                        _currentPage == _pages.length - 1 ? 'POČNI' : 'DALJE',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.5,
-                        ),
-                      ),
+                      child: _isLoading
+                          ? const SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(
+                                  color: Colors.white, strokeWidth: 2.5))
+                          : Text(
+                              _buttonLabel,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 1.5,
+                              ),
+                            ),
                     ),
                   ),
 
                   const SizedBox(height: 16),
 
-                  // Skip button
-                  if (_currentPage < _pages.length - 1)
+                  // Skip (samo na info stranicama, ne na formi)
+                  if (!_isFormPage && !_isLastInfoPage)
                     GestureDetector(
                       onTap: _completeOnboarding,
                       child: const Text(
                         'Preskoči',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: textMuted,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+
+                  // Skip forma (samo ako je prijavljen i na formi)
+                  if (_isFormPage)
+                    GestureDetector(
+                      onTap: () async {
+                        final prefs = await SharedPreferences.getInstance();
+                        await prefs.setBool('onboarding_done', true);
+                        if (!mounted) return;
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(builder: (_) => const MainShell()),
+                        );
+                      },
+                      child: const Text(
+                        'Preskoči za sada',
                         style: TextStyle(
                           fontSize: 14,
                           color: textMuted,
@@ -162,16 +286,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  Widget _buildPage(_OnboardingPage page) {
+  Widget _buildInfoPage(_OnboardingPage page) {
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [
-            page.gradient[0].withOpacity(0.15),
-            background,
-          ],
+          colors: [page.gradient[0].withOpacity(0.15), background],
         ),
       ),
       child: SafeArea(
@@ -180,7 +301,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Icon circle
               Container(
                 width: 140,
                 height: 140,
@@ -200,18 +320,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     ),
                   ],
                 ),
-                child: Icon(
-                  page.icon,
-                  size: 64,
-                  color: Colors.white,
-                ),
+                child: Icon(page.icon, size: 64, color: Colors.white),
               ),
-
               const SizedBox(height: 48),
-
-              // FK Sarajevo logo text
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                 decoration: BoxDecoration(
                   color: bordo.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(20),
@@ -227,10 +341,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 24),
-
-              // Title
               Text(
                 page.title,
                 textAlign: TextAlign.center,
@@ -242,10 +353,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   letterSpacing: -0.5,
                 ),
               ),
-
               const SizedBox(height: 16),
-
-              // Subtitle
               Text(
                 page.subtitle,
                 textAlign: TextAlign.center,
@@ -253,6 +361,138 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   fontSize: 16,
                   color: textSecondary,
                   height: 1.6,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFormPage() {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF2A1215), background],
+        ),
+      ),
+      child: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(32, 60, 32, 200),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Icon
+              Center(
+                child: Container(
+                  width: 100,
+                  height: 100,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF722F37), Color(0xFF5A2129)],
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: bordo.withOpacity(0.4),
+                        blurRadius: 30,
+                        spreadRadius: 3,
+                      ),
+                    ],
+                  ),
+                  child: const Icon(Icons.person_rounded,
+                      size: 48, color: Colors.white),
+                ),
+              ),
+              const SizedBox(height: 32),
+
+              const Center(
+                child: Text(
+                  'Kako se zoveš?',
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w800,
+                    color: textPrimary,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Center(
+                child: Text(
+                  'Ove informacije će biti vidljive\nna tvom profilu.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      fontSize: 15, color: textSecondary, height: 1.5),
+                ),
+              ),
+              const SizedBox(height: 40),
+
+              // Ime
+              const Text('Ime *',
+                  style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: textSecondary)),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _imeController,
+                style: const TextStyle(color: textPrimary),
+                textCapitalization: TextCapitalization.words,
+                onChanged: (_) => setState(() => _errorText = null),
+                decoration: InputDecoration(
+                  hintText: 'Npr. Amar',
+                  hintStyle: const TextStyle(color: textMuted),
+                  prefixIcon: const Icon(Icons.person_outline,
+                      color: textMuted, size: 22),
+                  filled: true,
+                  fillColor: cardBg,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: bordo, width: 2),
+                  ),
+                  errorText: _errorText,
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // Prezime
+              const Text('Prezime',
+                  style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: textSecondary)),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _prezimeController,
+                style: const TextStyle(color: textPrimary),
+                textCapitalization: TextCapitalization.words,
+                decoration: InputDecoration(
+                  hintText: 'Npr. Marović',
+                  hintStyle: const TextStyle(color: textMuted),
+                  prefixIcon: const Icon(Icons.person_outline,
+                      color: textMuted, size: 22),
+                  filled: true,
+                  fillColor: cardBg,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: bordo, width: 2),
+                  ),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                 ),
               ),
             ],
