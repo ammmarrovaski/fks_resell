@@ -65,6 +65,7 @@ class _AppEntryState extends State<_AppEntry> {
 
   Future<void> _init() async {
     final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('onboarding_done', false);
     final done = prefs.getBool('onboarding_done') ?? false;
     if (mounted) {
       setState(() {
